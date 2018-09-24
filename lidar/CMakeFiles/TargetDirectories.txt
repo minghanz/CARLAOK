@@ -1,0 +1,3 @@
+/home/minghanz/Downloads/lidar/CMakeFiles/rebuild_cache.dir
+/home/minghanz/Downloads/lidar/CMakeFiles/edit_cache.dir
+/home/minghanz/Downloads/lidar/CMakeFiles/CarlaLidar.dir
