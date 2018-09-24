@@ -20,14 +20,16 @@ from carla.sensor import Camera, Lidar
 from carla.settings import CarlaSettings
 from carla.tcp import TCPConnectionError
 from carla.util import print_over_same_line
-#from lidar.pcl_io import run_pcl
+
 from lidar import run_cpp
 
+import numpy as np
+import matplotlib.pyplot as plt
 
 def run_carla_client(args):
     # Here we will run 3 episodes with 300 frames each.
-    number_of_episodes = 3
-    frames_per_episode = 300
+    # number_of_episodes = 3
+    frames_per_episode = 10000
 
     # We assume the CARLA server is already waiting for a client to connect at
     # host:port. To create a connection we can use the `make_carla_client`
@@ -37,180 +39,216 @@ def run_carla_client(args):
     with make_carla_client(args.host, args.port) as client:
         print('CarlaClient connected')
 
-        for episode in range(0, number_of_episodes):
-            # Start a new episode.
+        # for episode in range(0, number_of_episodes):
+           # Start a new episode.
 
-            if args.settings_filepath is None:
+        if args.settings_filepath is None:
 
-                # Create a CarlaSettings object. This object is a wrapper around
-                # the CarlaSettings.ini file. Here we set the configuration we
-                # want for the new episode.
-                settings = CarlaSettings()
-                settings.set(
-                    SynchronousMode=True,
-                    SendNonPlayerAgentsInfo=True,
-                    NumberOfVehicles=0,
-                    NumberOfPedestrians=0,
-                    WeatherId=random.choice([1, 3, 7, 8, 14]),
-                    QualityLevel=args.quality_level)
-                settings.randomize_seeds()
+            # Create a CarlaSettings object. This object is a wrapper around
+            # the CarlaSettings.ini file. Here we set the configuration we
+            # want for the new episode.
+            settings = CarlaSettings()
+            settings.set(
+                SynchronousMode=True,
+                SendNonPlayerAgentsInfo=True,
+                NumberOfVehicles=0,                         # 20
+                NumberOfPedestrians=0,                      # 40
+                WeatherId=1,                              # random.choice([1, 3, 7, 8, 14]),
+                QualityLevel=args.quality_level)
+            settings.randomize_seeds()
 
-                # Now we want to add a couple of cameras to the player vehicle.
-                # We will collect the images produced by these cameras every
-                # frame.
+            # Now we want to add a couple of cameras to the player vehicle.
+            # We will collect the images produced by these cameras every
+            # frame.
 
-                # The default camera captures RGB images of the scene.
-                camera0 = Camera('CameraRGB')
-                # Set image resolution in pixels.
-                camera0.set_image_size(800, 600)
-                # Set its position relative to the car in meters.
-                camera0.set_position(0.30, 0, 1.30)
-                settings.add_sensor(camera0)
+            # The default camera captures RGB images of the scene.
+            camera0 = Camera('CameraRGB')
+            # Set image resolution in pixels.
+            camera0.set_image_size(800, 600)
+            # Set its position relative to the car in meters.
+            camera0.set_position(0.30, 0, 1.30)
+            settings.add_sensor(camera0)
 
-                # Let's add another camera producing ground-truth depth.
-                camera1 = Camera('CameraDepth', PostProcessing='Depth')
-                camera1.set_image_size(800, 600)
-                camera1.set_position(0.30, 0, 1.30)
-                settings.add_sensor(camera1)
+            # Let's add another camera producing ground-truth depth.
+            camera1 = Camera('CameraDepth', PostProcessing='Depth')
+            camera1.set_image_size(800, 600)
+            camera1.set_position(0.30, 0, 1.30)
+            settings.add_sensor(camera1)
 
-                if args.lidar:
-                    lidar = Lidar('Lidar32')
-                    lidar.set_position(0, 0, 2.50)
-                    lidar.set_rotation(0, 0, 0)
-                    lidar.set(
-                        Channels=16,  #32
-                        Range=50,
-                        PointsPerSecond=100000,
-                        RotationFrequency=10,
-                        UpperFovLimit=10,
-                        LowerFovLimit=-45) #-30
-                    settings.add_sensor(lidar)
+            if args.lidar:
+                lidar = Lidar('Lidar32')
+                lidar.set_position(0, 0, 2.50)
+                lidar.set_rotation(0, 0, 0)
+                lidar.set(
+                    Channels=32,
+                    Range=50,
+                    PointsPerSecond=100000,
+                    RotationFrequency=10,
+                    UpperFovLimit=10,
+                    LowerFovLimit=-30)
+                settings.add_sensor(lidar)
 
-            else:
+        else:
 
-                # Alternatively, we can load these settings from a file.
-                with open(args.settings_filepath, 'r') as fp:
-                    settings = fp.read()
+            # Alternatively, we can load these settings from a file.
+            with open(args.settings_filepath, 'r') as fp:
+                settings = fp.read()
 
-            # Now we load these settings into the server. The server replies
-            # with a scene description containing the available start spots for
-            # the player. Here we can provide a CarlaSettings object or a
-            # CarlaSettings.ini file as string.
-            scene = client.load_settings(settings)
+        # Now we load these settings into the server. The server replies
+        # with a scene description containing the available start spots for
+        # the player. Here we can provide a CarlaSettings object or a
+        # CarlaSettings.ini file as string.
+        scene = client.load_settings(settings)
 
-            # Choose one player start at random.
-            number_of_player_starts = len(scene.player_start_spots)
-            #player_start = random.randint(0, max(0, number_of_player_starts - 1))
-            player_start = 38
-            # Notify the server that we want to start the episode at the
-            # player_start index. This function blocks until the server is ready
-            # to start the episode.
-            print('Starting new episode...')
-            client.start_episode(player_start)
+        # Choose one player start at random.
+        # number_of_player_starts = len(scene.player_start_spots)
+        # player_start = random.randint(0, max(0, number_of_player_starts - 1))
+        player_start = 36
 
-            ######### Parameters for one test
-            lc_num = 0
-            lc_hold = False
-
-            #############
-
-            # Iterate every frame in the episode.
-            for frame in range(0, frames_per_episode):
-
-                # Read the data produced by the server this frame.
-                measurements, sensor_data = client.read_data()
+        # Notify the server that we want to start the episode at the
+        # player_start index. This function blocks until the server is ready
+        # to start the episode.
+        print('Starting new episode...')
+        client.start_episode(player_start)
+        px_l = -1
+        py_l = -1
+        ######### Parameters for one test
+        lc_num = 0
+        lc_hold = False
+        #############
 
 
+        # Iterate every frame in the episode.
+        for frame in range(0, frames_per_episode):
 
+            # Read the data produced by the server this frame.
+            measurements, sensor_data = client.read_data()
 
-                #ZYX LIDAR
+            #ZYX LIDAR
+            if not lc_hold:
                 result = run_cpp(sensor_data['Lidar32'].point_cloud)
-                print(result)
-		#(None, (0, 0), (0,0),(0,0))
                 #print('LP:',LP,'END')
-                import numpy as np
-                import matplotlib.pyplot as plt
+                
                 lidar_success = False
                 if result:
                     lidar_success = True
                     pts, kb, hdx, tlx = result
 
-                    #print('pts:',pts)
-                    #print('kb:',kb)
-                    #print('hdx:',hdx)
-                    #print('tlx:',tlx)
-                    #print('------------------------')
+            #print('pts:',pts)
+            #print('kb:',kb)
+            #print('hdx:',hdx)
+            #print('tlx:',tlx)
+            #print('------------------------')
 
-                #ZYX LIDAR
+            #ZYX LIDAR
 
 
 
-                # Print some of the measurements.
-                print_measurements(measurements)
 
-                # Save the images to disk if requested.
-                if args.save_images_to_disk:
-                    for name, measurement in sensor_data.items():
-                        filename = args.out_filename_format.format(episode, name, frame)
-                        measurement.save_to_disk(filename)
+            # Print some of the measurements.
+            #print_measurements(measurements)
 
-                # We can access the encoded data of a given image as numpy
-                # array using its "data" property. For instance, to get the
-                # depth value (normalized) at pixel X, Y
-                #
-                #     depth_array = sensor_data['CameraDepth'].data
-                #     value_at_pixel = depth_array[Y, X]
-                #
+            # Save the images to disk if requested.
+            if args.save_images_to_disk:
+                for name, measurement in sensor_data.items():
+                    filename = args.out_filename_format.format(0, name, frame) # episode
+                    measurement.save_to_disk(filename)
 
-                # Now we have to send the instructions to control the vehicle.
-                # If we are in synchronous mode the server will pause the
-                # simulation until we send this control.
+            # We can access the encoded data of a given image as numpy
+            # array using its "data" property. For instance, to get the
+            # depth value (normalized) at pixel X, Y
+            #
+            #     depth_array = sensor_data['CameraDepth'].data
+            #     value_at_pixel = depth_array[Y, X]
+            #
 
-                if not args.autopilot:
-                    player_measurements = measurements.player_measurements
-                    pos_x=player_measurements.transform.location.x
-                    pos_y=player_measurements.transform.location.y
-                    speed=player_measurements.forward_speed * 3.6
-                    if speed > 28:
-                        br = (speed-28)*0.1
-                        thr = 0.0
-                    else:
-                        br = 0.0
-                        thr = (28-speed)*0.05 + 0.6
+            # Now we have to send the instructions to control the vehicle.
+            # If we are in synchronous mode the server will pause the
+            # simulation until we send this control.
 
-                    st = 0
-                    if lidar_success and hdx[0]<-2.2:
+            if not args.autopilot:
+                player_measurements = measurements.player_measurements
+                pos_x=player_measurements.transform.location.x
+                pos_y=player_measurements.transform.location.y
+                speed=player_measurements.forward_speed * 3.6
+
+                #Traffic Light
+                # print('TrafficLight:-----------------')
+                # for agent in measurements.non_player_agents:
+                #     if agent.HasField('traffic_light'):
+                #         print(agent.id)
+                #         print(agent.traffic_light.transform)
+                #         print(agent.traffic_light.state)
+                #         print('-----------------')
+                #         break
+
+                #Traffic Light End
+
+
+
+                if px_l == -1:
+                    px_l = pos_x
+                if py_l == -1:
+                    py_l = pos_y
+                delta_x = pos_x-px_l
+                delta_y = pos_y-py_l
+                st = 0
+                #if pos_y < 11:
+                 #   st = 0.3
+
+                if hdx[0]<-2.2 and lidar_success:
                         lc_num += 1
-                    else:
-                        lc_num = 0
-
-                    if lc_num >2:
-                        lc_hold = True
-
-                    if lc_hold:
-                        st = 0.35
-                    #if pos_y < 10:
-                    #    st = 0.3
-                    print('lc_num:',lc_num)
-                    print('Steering:',st)
-                    client.send_control(
-                        steer=st,
-                        throttle=thr,
-                        brake=br,
-                        hand_brake=False,
-                        reverse=False)
-
                 else:
+                    lc_num = 0
 
-                    # Together with the measurements, the server has sent the
-                    # control that the in-game autopilot would do this frame. We
-                    # can enable autopilot by sending back this control to the
-                    # server. We can modify it if wanted, here for instance we
-                    # will add some noise to the steer.
+                if lc_hold:
+                    st = 0.30
 
-                    control = measurements.player_measurements.autopilot_control
-                    control.steer += random.uniform(-0.1, 0.1)
-                    client.send_control(control)
+                if lc_num >2:
+                    lc_hold = True
+                    st = 0.25
+
+
+                print('lc_num:',lc_num)
+
+
+
+                if speed > 28:
+                    br = (speed-28)*0.1
+                    thr = 0
+                else:
+                    br = 0
+                    thr = (28-speed)*0.05 + 0.6
+                if pos_y > 150:
+                    thr = 1
+                    br = 0
+                if pos_x > 5:
+                #if pos_y < 11:
+                    st = -delta_y*10 + (2-pos_y)*0.8
+                if abs(st)<0.001:
+                    st = 0
+                    #st = (2-pos_y)*0.01
+                print('Steering:',st)
+                client.send_control(
+                    #steer=random.uniform(-1.0, 1.0),
+                    steer=st,
+                    throttle=thr,
+                    brake=br,
+                    hand_brake=False,
+                    reverse=False)
+                px_l = pos_x
+                py_l = pos_y
+            else:
+
+                # Together with the measurements, the server has sent the
+                # control that the in-game autopilot would do this frame. We
+                # can enable autopilot by sending back this control to the
+                # server. We can modify it if wanted, here for instance we
+                # will add some noise to the steer.
+
+                control = measurements.player_measurements.autopilot_control
+                control.steer += random.uniform(-0.1, 0.1)
+                client.send_control(control)
 
 
 def print_measurements(measurements):
@@ -264,7 +302,7 @@ def main():
         '-q', '--quality-level',
         choices=['Low', 'Epic'],
         type=lambda s: s.title(),
-        default='Low',
+        default='Epic',             # 'Epic'
         help='graphics quality level, a lower level makes the simulation run considerably faster.')
     argparser.add_argument(
         '-i', '--images-to-disk',
