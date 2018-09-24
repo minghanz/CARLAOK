@@ -2,10 +2,12 @@ from subprocess import Popen, PIPE
 import numpy as np
 from time import time
 from sklearn.linear_model import RANSACRegressor
+import matplotlib.pyplot as plt
 
 LIDAR_EXE = "lidar/CarlaLidar"
+counter = 0
 
-def run_cpp(pointcloud):
+def run_cpp(pointcloud, save=False):
     '''
     pointcloud: sensor.PointCloud type
     
@@ -16,7 +18,17 @@ def run_cpp(pointcloud):
     (lheadx, rheadx): x offset of both edges at head
     (ltailx, rtailx): x offset of both edges at tail
     '''
+    global counter
+
     try:
+        if save:
+            pcarr = np.array([point[0], point[1]] for point in pointcloud.array)
+            plt.figure()
+            plt.plot(pcarr[:, 0], pcarr[:, 1])
+            plt.axis('scaled')
+            plt.savefig("lidar_out/%06d_in.jpg" % counter)
+            counter += 1
+
         tstart = time()
         proc = Popen([LIDAR_EXE, "-"], stdin=PIPE, stdout=PIPE) #, stderr=PIPE)
 
@@ -38,6 +50,14 @@ def run_cpp(pointcloud):
             else:
                 rpoints.append(pt)
         lpoints, rpoints = np.array(lpoints), np.array(rpoints)
+
+        if save:
+            plt.figure()
+            plt.plot(lpoints[:, 0], lpoints[:, 1])
+            plt.plot(rpoints[:, 0], rpoints[:, 1])
+            plt.axis('scaled')
+            plt.savefig("lidar_out/%06d_out.jpg" % counter)
+            counter += 1
 
         # Post process
         if len(lpoints) < 3 or len(rpoints) < 3: return False
