@@ -15,6 +15,10 @@ import logging
 import random
 import time
 
+import os
+# from time import sleep
+import struct     # for parsing binaries to float
+
 from carla.client import make_carla_client
 from carla.sensor import Camera, Lidar
 from carla.settings import CarlaSettings
@@ -25,6 +29,32 @@ from lidar import run_cpp
 
 import numpy as np
 import matplotlib.pyplot as plt
+
+FIFO_IMAGES = "/home/minghanz/catkin_ws/src/carla/PythonClient/CARLAOK/images.fifo"
+FIFO_LANES =  "/home/minghanz/catkin_ws/src/carla/PythonClient/CARLAOK/lanes.fifo"
+
+def send_image(pixelarray):
+    '''
+    The function is to send image to c++ process through named pipe
+    '''
+    #print("Entering sending images")
+    image_string = pixelarray.tostring()
+    with open(FIFO_IMAGES, "wb") as f:
+        f.write(image_string)
+    #print("Exiting sending images")
+
+    #print("Entering receiving lanes")
+    a = np.ndarray((6,),float)
+    with open(FIFO_LANES, "rb") as g:
+        for i in range(0,6):
+            data = g.read(4)
+            flo = struct.unpack('f', data)
+            # print(flo)
+            a[i] = flo[0]
+    #print("Exiting receiving lanes")
+
+    return a
+
 
 def run_carla_client(args):
     # Here we will run 3 episodes with 300 frames each.
@@ -66,14 +96,14 @@ def run_carla_client(args):
             # Set image resolution in pixels.
             camera0.set_image_size(800, 600)
             # Set its position relative to the car in meters.
-            camera0.set_position(0.30, 0, 1.30)
+            camera0.set_position(0.3, 0, 2.30) # 0.3, 0, 1.3
             settings.add_sensor(camera0)
 
             # Let's add another camera producing ground-truth depth.
-            camera1 = Camera('CameraDepth', PostProcessing='Depth')
-            camera1.set_image_size(800, 600)
-            camera1.set_position(0.30, 0, 1.30)
-            settings.add_sensor(camera1)
+            # camera1 = Camera('CameraDepth', PostProcessing='Depth')
+            # camera1.set_image_size(800, 600)
+            # camera1.set_position(0.30, 0, 1.30)
+            # settings.add_sensor(camera1)
 
             if args.lidar:
                 lidar = Lidar('Lidar32')
@@ -103,7 +133,7 @@ def run_carla_client(args):
         # Choose one player start at random.
         # number_of_player_starts = len(scene.player_start_spots)
         # player_start = random.randint(0, max(0, number_of_player_starts - 1))
-        player_start = 36
+        player_start = 31
 
         # Notify the server that we want to start the episode at the
         # player_start index. This function blocks until the server is ready
@@ -115,6 +145,9 @@ def run_carla_client(args):
         ######### Parameters for one test
         lc_num = 0
         lc_hold = False
+        lc_start_turn = False
+        lc_num_2 = 100 # for counting failures in turning
+        lc_num_3 = 0
         #############
 
 
@@ -125,14 +158,14 @@ def run_carla_client(args):
             measurements, sensor_data = client.read_data()
 
             #ZYX LIDAR
-            if not lc_hold:
-                result = run_cpp(sensor_data['Lidar32'].point_cloud)
-                #print('LP:',LP,'END')
+            # if not lc_hold:
+            #     result = run_cpp(sensor_data['Lidar32'].point_cloud)
+            #     #print('LP:',LP,'END')
                 
-                lidar_success = False
-                if result:
-                    lidar_success = True
-                    pts, kb, hdx, tlx = result
+            #     lidar_success = False
+            #     if result:
+            #         lidar_success = True
+            #         pts, kb, hdx, tlx = result
 
             #print('pts:',pts)
             #print('kb:',kb)
@@ -143,7 +176,9 @@ def run_carla_client(args):
             #ZYX LIDAR
 
 
-
+            image = sensor_data['CameraRGB'].data
+            lane_coef = send_image(image)
+            print("lane_coef: ", lane_coef)
 
             # Print some of the measurements.
             #print_measurements(measurements)
@@ -196,22 +231,74 @@ def run_carla_client(args):
                 #if pos_y < 11:
                  #   st = 0.3
 
-                if hdx[0]<-2.2 and lidar_success:
-                        lc_num += 1
+                # if lidar_success and hdx[0]<-2.2: 
+                #     lc_num += 1
+                # else:
+                #     lc_num = 0
+
+                # if lc_hold:
+                #     st = 0.3
+
+                # if lc_num>2 and not lc_hold:
+                #     lc_hold = True
+                #     st = 0.2
+
+
+                # if  abs(lane_coef[2]) > 0.003 and frame > 100:
+                #     lc_num += 1
+                # else:
+                #     lc_num = 0
+
+                # if lc_num>5 and not lc_start_turn:
+                #     lc_start_turn = True
+
+                # if lc_start_turn and lane_coef[0] == 0:
+                #     lc_num_2 += 1
+                
+                # if lc_hold:
+                #     st = 0.3
+
+                # if lc_num_2 > 5 and not lc_hold:
+                #     lc_hold = True
+                #     st = 0.25
+
+
+
+                if  abs(lane_coef[2]) > 0.003 and frame > 300:
+                    lc_num += 1
                 else:
                     lc_num = 0
 
+                if lc_num>5 and not lc_start_turn:
+                    lc_start_turn = True
+                    lc_num_2 = 20
+                
+                if lc_start_turn and lc_num_2 > 0:
+                    lc_num_2 -= 1
+                
                 if lc_hold:
-                    st = 0.30
+                    st = 0.3
 
-                if lc_num >2:
+                if lc_num_2 == 0 and not lc_hold:
                     lc_hold = True
                     st = 0.25
+                
 
-
+                # print('lidar_success:', lidar_success )
                 print('lc_num:',lc_num)
+                print('lc_num_2:',lc_num_2)
 
-
+                if lc_hold and lane_coef[0] != 0:
+                    a1 = lane_coef[1]+lane_coef[4]
+                    a2 = lane_coef[0]+lane_coef[3] - 0.2
+                    l = 5
+                    k = 0.08
+                    st = k*(a1*l+a2)
+                    print('a1:',a1)
+                    print('a2:',a2)
+                   
+                
+                
 
                 if speed > 28:
                     br = (speed-28)*0.1
@@ -220,13 +307,21 @@ def run_carla_client(args):
                     br = 0
                     thr = (28-speed)*0.05 + 0.6
                 if pos_y > 150:
-                    thr = 1
+                    thr = 1.6
                     br = 0
-                if pos_x > 5:
-                #if pos_y < 11:
-                    st = -delta_y*10 + (2-pos_y)*0.8
-                if abs(st)<0.001:
+
+                if lc_hold:
+                    lc_num_3 += 1
+                print('lc_num_3:',lc_num_3)
+
+                if lc_num_3 > 185:
+                    thr = 0
+                    br = 1
                     st = 0
+               # if pos_x > 5:
+               #     st = -delta_y*10 + (2-pos_y)*0.8
+               # if abs(st)<0.001:
+              #      st = 0
                     #st = (2-pos_y)*0.01
                 print('Steering:',st)
                 client.send_control(
@@ -324,6 +419,15 @@ def main():
     logging.info('listening to server %s:%s', args.host, args.port)
 
     args.out_filename_format = '_out/episode_{:0>4d}/{:s}/{:0>6d}'
+
+    try:
+        os.mkfifo(FIFO_IMAGES)
+    except OSError:
+        pass
+    try:
+        os.mkfifo(FIFO_LANES)
+    except OSError:
+        pass
 
     while True:
         try:
