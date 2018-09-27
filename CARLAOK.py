@@ -97,7 +97,7 @@ def run_carla_client(args):
             # frame.
 
             # The default camera captures RGB images of the scene.
-            camera0 = Camera('CameraRGB')
+            camera0 = Camera('CameraRGB', PostProcessing='None')
             # Set image resolution in pixels.
             camera0.set_image_size(800, 600)
             # Set its position relative to the car in meters.
