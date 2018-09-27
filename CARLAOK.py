@@ -25,6 +25,8 @@ from carla.settings import CarlaSettings
 from carla.tcp import TCPConnectionError
 from carla.util import print_over_same_line
 
+from subprocess import Popen
+
 from lidar import run_cpp
 
 import numpy as np
@@ -57,6 +59,9 @@ def send_image(pixelarray):
 
 
 def run_carla_client(args):
+    lane_detection = Popen(["/home/minghanz/lane-detection/newcheck/SFMotor/lane detection/lane-detection"],
+                            cwd="/home/minghanz/lane-detection/newcheck/SFMotor/lane detection")
+
     # Here we will run 3 episodes with 300 frames each.
     # number_of_episodes = 3
     frames_per_episode = 10000
@@ -113,7 +118,7 @@ def run_carla_client(args):
                     Channels=32,
                     Range=50,
                     PointsPerSecond=100000,
-                    RotationFrequency=10,
+                    RotationFrequency=20,
                     UpperFovLimit=10,
                     LowerFovLimit=-30)
                 settings.add_sensor(lidar)
@@ -158,20 +163,20 @@ def run_carla_client(args):
             measurements, sensor_data = client.read_data()
 
             #ZYX LIDAR
-            # if not lc_hold:
-            #     result = run_cpp(sensor_data['Lidar32'].point_cloud)
-            #     #print('LP:',LP,'END')
+            if True: #not lc_hold:
+                result = run_cpp(sensor_data['Lidar32'].point_cloud, True)
+                #print('LP:',LP,'END')
                 
-            #     lidar_success = False
-            #     if result:
-            #         lidar_success = True
-            #         pts, kb, hdx, tlx = result
+                lidar_success = False
+                if result:
+                    lidar_success = True
+                    pts, kb, hdx, tlx = result
 
-            #print('pts:',pts)
-            #print('kb:',kb)
-            #print('hdx:',hdx)
-            #print('tlx:',tlx)
-            #print('------------------------')
+            # print('pts:',pts)
+            # print('kb:',kb)
+            # print('hdx:',hdx)
+            # print('tlx:',tlx)
+            print('------------------------')
 
             #ZYX LIDAR
 
@@ -271,7 +276,7 @@ def run_carla_client(args):
 
                 if lc_num>5 and not lc_start_turn:
                     lc_start_turn = True
-                    lc_num_2 = 20
+                    lc_num_2 = 15
                 
                 if lc_start_turn and lc_num_2 > 0:
                     lc_num_2 -= 1
@@ -344,6 +349,8 @@ def run_carla_client(args):
                 control = measurements.player_measurements.autopilot_control
                 control.steer += random.uniform(-0.1, 0.1)
                 client.send_control(control)
+    
+    lane_detection.kill()
 
 
 def print_measurements(measurements):

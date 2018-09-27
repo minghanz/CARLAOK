@@ -50,7 +50,7 @@ int main(int argc, char *argv[])
 
     // Get road plane
     const float step = 0.05;
-    const int road_min_count = 1000;
+    const int road_min_count = 500;
     map<int, vector<int>> planes;
     for (int idx = 0; idx < cloud->size(); idx++)
     {
@@ -224,7 +224,7 @@ int main(int argc, char *argv[])
         viewer.createViewPort(0.5, 0.0, 1.0, 1.0, port1);
         viewer.setBackgroundColor(0, 0, 0, port1);
         viewer.addPointCloud<pcl::PointXYZ>(leftedge, "left", port1);
-        viewer.addPointCloud<pcl::PointXYZ>(rightedge, "right", port1);
+        // viewer.addPointCloud<pcl::PointXYZ>(rightedge, "right", port1);
         viewer.addCoordinateSystem(1.0, 2);
 
         viewer.createViewPort(0.0, 0.0, 0.5, 1.0, port2);

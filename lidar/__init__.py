@@ -2,6 +2,7 @@ from subprocess import Popen, PIPE
 import numpy as np
 from time import time
 from sklearn.linear_model import RANSACRegressor
+from os import mkdir
 import matplotlib.pyplot as plt
 
 LIDAR_EXE = "lidar/CarlaLidar"
@@ -19,15 +20,18 @@ def run_cpp(pointcloud, save=False):
     (ltailx, rtailx): x offset of both edges at tail
     '''
     global counter
+    counter += 1
+
+    if save:
+        pcarr = np.array([[point[0], point[1]] for point in pointcloud.array])
+        plt.clf()
+        plt.scatter(pcarr[:, 0], pcarr[:, 1], s=1)
+        plt.axis('scaled')
+        plt.savefig("lidar_out/%06d_in.jpg" % counter)
+
+        # pointcloud.save_to_disk("lidar_out/%06d.ply" % counter)
 
     try:
-        if save:
-            pcarr = np.array([point[0], point[1]] for point in pointcloud.array)
-            plt.figure()
-            plt.plot(pcarr[:, 0], pcarr[:, 1])
-            plt.axis('scaled')
-            plt.savefig("lidar_out/%06d_in.jpg" % counter)
-            counter += 1
 
         tstart = time()
         proc = Popen([LIDAR_EXE, "-"], stdin=PIPE, stdout=PIPE) #, stderr=PIPE)
@@ -50,19 +54,18 @@ def run_cpp(pointcloud, save=False):
             else:
                 rpoints.append(pt)
         lpoints, rpoints = np.array(lpoints), np.array(rpoints)
-
-        if save:
-            plt.figure()
-            plt.plot(lpoints[:, 0], lpoints[:, 1])
-            plt.plot(rpoints[:, 0], rpoints[:, 1])
-            plt.axis('scaled')
-            plt.savefig("lidar_out/%06d_out.jpg" % counter)
-            counter += 1
+        proc.kill()
 
         # Post process
         if len(lpoints) < 3 or len(rpoints) < 3: return False
         lpoints[:, 0:2] *= -1 # invert y, z axis
         rpoints[:, 0:2] *= -1
+
+        if save:
+            plt.figure()
+            plt.hold(True)
+            plt.scatter(lpoints[:, 0], lpoints[:, 1], c='r')
+            plt.scatter(rpoints[:, 0], rpoints[:, 1], c='b')
         
         lcenter = lpoints[np.argmin(np.abs(lpoints[:, 1])), 0] # center offsets
         rcenter = rpoints[np.argmin(np.abs(rpoints[:, 1])), 0]
@@ -73,17 +76,29 @@ def run_cpp(pointcloud, save=False):
 
         ransac = RANSACRegressor() # fit line
         ransac.fit(lpoints[:, [1]], lpoints[:, [0]])
+        if save: plt.plot(ransac.predict(lpoints[:, [1]]).reshape(-1), lpoints[:, 1])
         bl, kl = ransac.predict([[0], [1]])
         kl -= bl
         ransac.fit(rpoints[:, [1]], rpoints[:, [0]])
+        if save: plt.plot(ransac.predict(rpoints[:, [1]]).reshape(-1), rpoints[:, 1])
         br, kr = ransac.predict([[0], [1]])
         kr -= br
         
         k = (kl * len(lpoints) + kr * len(rpoints)) / (len(lpoints) + len(rpoints))
         b = 0.25 * bl + 0.75 * br
 
+        if save:
+            plt.clf()
+            ypoints = np.concatenate((lpoints[:, 1], rpoints[:, 1]))
+            xpoints = k * ypoints + b
+            plt.plot(xpoints, ypoints)
+            plt.axis('scaled')
+            plt.savefig("lidar_out/%06d_out.jpg" % counter)
+
         tend = time()
         # print("Process time: ", tend - tstart)
         return (lpoints, rpoints), (k, b), (lheadx, rheadx), (ltailx, rtailx)
     except:
         return False
+
+        # raise
