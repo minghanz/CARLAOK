@@ -97,7 +97,7 @@ def run_carla_client(args):
             # frame.
 
             # The default camera captures RGB images of the scene.
-            camera0 = Camera('CameraRGB', PostProcessing='None')
+            camera0 = Camera('CameraRGB') # , PostProcessing='None'
             # Set image resolution in pixels.
             camera0.set_image_size(800, 600)
             # Set its position relative to the car in meters.
@@ -163,14 +163,14 @@ def run_carla_client(args):
             measurements, sensor_data = client.read_data()
 
             #ZYX LIDAR
-            if True: #not lc_hold:
-                result = run_cpp(sensor_data['Lidar32'].point_cloud, True)
-                #print('LP:',LP,'END')
+            # if True: #not lc_hold:
+            #     result = run_cpp(sensor_data['Lidar32'].point_cloud, True)
+            #     #print('LP:',LP,'END')
                 
-                lidar_success = False
-                if result:
-                    lidar_success = True
-                    pts, kb, hdx, tlx = result
+            #     lidar_success = False
+            #     if result:
+            #         lidar_success = True
+            #         pts, kb, hdx, tlx = result
 
             # print('pts:',pts)
             # print('kb:',kb)
@@ -276,7 +276,7 @@ def run_carla_client(args):
 
                 if lc_num>5 and not lc_start_turn:
                     lc_start_turn = True
-                    lc_num_2 = 15
+                    lc_num_2 = 17
                 
                 if lc_start_turn and lc_num_2 > 0:
                     lc_num_2 -= 1
@@ -311,9 +311,9 @@ def run_carla_client(args):
                 else:
                     br = 0
                     thr = (28-speed)*0.05 + 0.6
-                if pos_y > 150:
-                    thr = 1.6
-                    br = 0
+                # if pos_y > 150:
+                #     thr = 1.6
+                #     br = 0
 
                 if lc_hold:
                     lc_num_3 += 1
