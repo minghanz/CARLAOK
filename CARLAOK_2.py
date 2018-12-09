@@ -17,6 +17,11 @@ import random
 import time
 import math
 
+import os
+# from time import sleep
+import struct     # for parsing binaries to float
+from subprocess import Popen
+
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -26,8 +31,36 @@ from carla.settings import CarlaSettings
 from carla.tcp import TCPConnectionError
 from carla.util import print_over_same_line
 
+FIFO_IMAGES = "/home/minghanz/catkin_ws/src/carla/PythonClient/CARLAOK/images.fifo"
+FIFO_LANES =  "/home/minghanz/catkin_ws/src/carla/PythonClient/CARLAOK/lanes.fifo"
+
+def send_image(pixelarray):
+    '''
+    The function is to send image to c++ process through named pipe
+    '''
+    #print("Entering sending images")
+    image_string = pixelarray.tostring()
+    with open(FIFO_IMAGES, "wb") as f:
+        f.write(image_string)
+    #print("Exiting sending images")
+
+    #print("Entering receiving lanes")
+    a = np.ndarray((6,),float)
+    with open(FIFO_LANES, "rb") as g:
+        for i in range(0,6):
+            data = g.read(4)
+            flo = struct.unpack('f', data)
+            # print(flo)
+            a[i] = flo[0]
+    #print("Exiting receiving lanes")
+
+    return a
 
 def run_carla_client(args):
+    if not args.autopilot:
+        lane_detection = Popen(["/home/minghanz/lane-detection/newcheck/SFMotor/lane detection/lane-detection"],
+                                cwd="/home/minghanz/lane-detection/newcheck/SFMotor/lane detection")
+
     # Here we will run 3 episodes with 300 frames each.
     # number_of_episodes = 3
     frames_per_episode = 10000
@@ -67,14 +100,14 @@ def run_carla_client(args):
             # Set image resolution in pixels.
             camera0.set_image_size(800, 600)
             # Set its position relative to the car in meters.
-            camera0.set_position(0.30, 0, 1.30)
+            camera0.set_position(0.30, -3.0, 2.30)
             settings.add_sensor(camera0)
 
-            # Let's add another camera producing ground-truth depth.
-            camera1 = Camera('CameraDepth', PostProcessing='Depth')
-            camera1.set_image_size(800, 600)
-            camera1.set_position(0.30, 0, 1.30)
-            settings.add_sensor(camera1)
+            # # Let's add another camera producing ground-truth depth.
+            # camera1 = Camera('CameraDepth', PostProcessing='Depth')
+            # camera1.set_image_size(800, 600)
+            # camera1.set_position(0.30, 0, 1.30)
+            # settings.add_sensor(camera1)
 
             if args.lidar:
                 lidar = Lidar('Lidar32')
@@ -141,9 +174,16 @@ def run_carla_client(args):
             # simulation until we send this control.
 
             if not args.autopilot:
+                image = sensor_data['CameraRGB'].data
+                lane_coef = send_image(image)
+                print("lane_coef: ", lane_coef)
+
+
+            if not args.autopilot:
                 player_measurements = measurements.player_measurements
                 pos_x=player_measurements.transform.location.x
                 pos_y=player_measurements.transform.location.y
+                yaw = player_measurements.transform.rotation.yaw
                 speed=player_measurements.forward_speed * 3.6
 
                 #Traffic Light
@@ -163,8 +203,8 @@ def run_carla_client(args):
                     px_l = pos_x
                 if py_l == -1:
                     py_l = pos_y
-                delta_x = pos_x-px_l
-                delta_y = pos_y-py_l
+                #delta_x = pos_x-px_l
+                #delta_y = pos_y-py_l
                 st = 0
 
                 if speed > 28:
@@ -180,24 +220,40 @@ def run_carla_client(args):
 
                 L = sensor_data["Lidar32"].point_cloud.array
                 L = L[L[:,2]<2.1]
-                L = L[L[:,1]<0]
+                L = L[L[:,1]<-2]
                 if len(L) == 0:
                     come_back = True
                 else:
                     come_back = False
 
+              
+                # theta1 = math.atan2((lane_coef[1]+lane_coef[4])/2,1)
+                # print(theta1)
+                k1 = (lane_coef[1]+lane_coef[4])/2
+                print("lane_k:",k1)
+                # print("yaw:",yaw)
+                k = math.tan(-yaw/180*math.pi)
+                print("real_k:",k)
+                print("ratio k:", k/k1)
+                k_obs = k1 * 2.5
+                theta = math.atan(k_obs)
+                print("theta_obs: ", theta)
+                print("theta_tru: ", -yaw/180*math.pi)
+                print("theta_dif: ", theta + yaw/180*math.pi)
+                # theta = -yaw/180*math.pi
+                #theta = math.atan2(-0.5*(lane_coef[1]+lane_coef[4])/2,1)
+                #print("diff:",(theta-theta1)*100)
+                delta_x = speed*math.cos(theta)*0.1/3.6
                 if not come_back:
                     X = L[:,0]
                     Y = -L[:,1]
-                    theta = math.atan2(-delta_y,delta_x)
-                    delta_x = speed*math.cos(theta)*0.1/3.6
                     XX = math.cos(theta)*X - math.sin(theta)*Y
                     YY = math.sin(theta)*X + math.cos(theta)*Y
                     plt.plot(XX, YY, 'ro')
                     if min(YY)>delta_x*30:
                         come_back = True
-                else:
-                    theta = 0
+                #else:
+                    #theta = 0
                 #plt.plot([106-pos_y,106-pos_y],[-90-pos_x,100-pos_x])
                 #plt.plot([109.5-pos_y,109.5-pos_y],[-90-pos_x,100-pos_x])
 
@@ -206,20 +262,12 @@ def run_carla_client(args):
                 plt.plot([112-pos_y,112-pos_y],[-90-pos_x,200-pos_x])
                 plt.plot([0],[0], '*')
                 plt.axis([-5, 5, -10, 50])
-
+                print("tx:",109.5-pos_y)
                 if come_back:
-                    tx = 109.5-pos_y
-                    ty = delta_x*15
+                    tx = lane_coef[3]-0.8#109.5-pos_y
+                    
+                    ty = delta_x*30
                 else:
-                    if pos_x<0:
-                        tx = min(XX)-3
-                        ty = delta_x*30
-                    if pos_x>=0 and pos_x<15:
-                        tx = 109.5-pos_y
-                        ty = delta_x*30
-                    if pos_x>=15 and pos_x<32:
-                        tx = 107-pos_y
-                        ty = delta_x*30
                     tx = min(XX)-3
                     ty = delta_x*30
                     if ty > min(YY) and tx > 1 and np.sqrt(tx*tx+ty*ty)>5:
@@ -228,11 +276,11 @@ def run_carla_client(args):
                 if speed < 2:
                     st = 0
                 else:
-                    st = -(math.atan2(-tx,ty)-math.atan2(-delta_y,delta_x))*0.8
+                    st = -(math.atan2(-tx,ty)-theta)*0.8
 
                 plt.plot([tx],[ty], 'r*')
 
-                if pos_x>60:
+                if pos_x>70:
                     br = 1
                     thr = 0
                     st = 0
@@ -241,7 +289,7 @@ def run_carla_client(args):
 
                 if frame == 0:
                     plt.show(block=False)
-                    plt.pause(5)
+                    plt.pause(0.01)
                     plt.clf()
                 else:
                     plt.show(block=False)
@@ -271,6 +319,8 @@ def run_carla_client(args):
                 control = measurements.player_measurements.autopilot_control
                 control.steer += random.uniform(-0.1, 0.1)
                 client.send_control(control)
+
+    lane_detection.kill()
 
 
 def print_measurements(measurements):
@@ -346,6 +396,16 @@ def main():
     logging.info('listening to server %s:%s', args.host, args.port)
 
     args.out_filename_format = '_out/episode_{:0>4d}/{:s}/{:0>6d}'
+
+    try:
+        os.mkfifo(FIFO_IMAGES)
+    except OSError:
+        pass
+    try:
+        os.mkfifo(FIFO_LANES)
+    except OSError:
+        pass
+
 
     while True:
         try:

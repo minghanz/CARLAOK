@@ -59,8 +59,9 @@ def send_image(pixelarray):
 
 
 def run_carla_client(args):
-    lane_detection = Popen(["/home/minghanz/lane-detection/newcheck/SFMotor/lane detection/lane-detection"],
-                            cwd="/home/minghanz/lane-detection/newcheck/SFMotor/lane detection")
+    if not args.autopilot:
+        lane_detection = Popen(["/home/minghanz/lane-detection/newcheck/SFMotor/lane detection/lane-detection"],
+                                cwd="/home/minghanz/lane-detection/newcheck/SFMotor/lane detection")
 
     # Here we will run 3 episodes with 300 frames each.
     # number_of_episodes = 3
@@ -88,15 +89,19 @@ def run_carla_client(args):
                 SendNonPlayerAgentsInfo=True,
                 NumberOfVehicles=0,                         # 20
                 NumberOfPedestrians=0,                      # 40
-                WeatherId=1,                              # random.choice([1, 3, 7, 8, 14]),
-                QualityLevel=args.quality_level)
+                WeatherId=2,                              # random.choice([1, 3, 7, 8, 14]),
+                QualityLevel=args.quality_level ) #, 
+                # MapName = 'Town01' )
             settings.randomize_seeds()
+            # 1 (with shadow) sunny, 2 bright cloudy, 3 (with shadow), after rain, 4 (ambient light) after rain, 
+            # 5 middle rain, 6 big rain, 7 small rain, 8 dark, 9 cloudy, 
+            # 10(cloudy) 11(sunny) after rain, 12 13 rain, 
 
             # Now we want to add a couple of cameras to the player vehicle.
             # We will collect the images produced by these cameras every
             # frame.
 
-            # The default camera captures RGB images of the scene.
+            # # The default camera captures RGB images of the scene.
             camera0 = Camera('CameraRGB') # , PostProcessing='None'
             # Set image resolution in pixels.
             camera0.set_image_size(800, 600)
@@ -105,10 +110,15 @@ def run_carla_client(args):
             settings.add_sensor(camera0)
 
             # Let's add another camera producing ground-truth depth.
-            # camera1 = Camera('CameraDepth', PostProcessing='Depth')
-            # camera1.set_image_size(800, 600)
-            # camera1.set_position(0.30, 0, 1.30)
-            # settings.add_sensor(camera1)
+            camera2 = Camera('CameraDepth', PostProcessing='Depth')
+            camera2.set_image_size(800, 600)
+            camera2.set_position(0.30, 0, 2.30)
+            settings.add_sensor(camera2)
+
+            camera3 = Camera('CameraSemantics', PostProcessing='SemanticSegmentation')
+            camera3.set_image_size(800, 600)
+            camera3.set_position(0.30, 0, 2.30)
+            settings.add_sensor(camera3)
 
             if args.lidar:
                 lidar = Lidar('Lidar32')
@@ -155,6 +165,8 @@ def run_carla_client(args):
         lc_num_3 = 0
         #############
 
+        if args.writepose:
+            pose_txt_obj = open('pose.txt', 'w')
 
         # Iterate every frame in the episode.
         for frame in range(0, frames_per_episode):
@@ -176,14 +188,14 @@ def run_carla_client(args):
             # print('kb:',kb)
             # print('hdx:',hdx)
             # print('tlx:',tlx)
-            print('------------------------')
+            print('------------------------%d'%(frame))
 
             #ZYX LIDAR
 
-
-            image = sensor_data['CameraRGB'].data
-            lane_coef = send_image(image)
-            print("lane_coef: ", lane_coef)
+            if not args.autopilot:
+                image = sensor_data['CameraRGB'].data
+                lane_coef = send_image(image)
+                print("lane_coef: ", lane_coef)
 
             # Print some of the measurements.
             #print_measurements(measurements)
@@ -201,6 +213,15 @@ def run_carla_client(args):
             #     depth_array = sensor_data['CameraDepth'].data
             #     value_at_pixel = depth_array[Y, X]
             #
+
+            if args.writepose:
+                player_measurements = measurements.player_measurements
+                cur_trans = player_measurements.transform.location
+                print('cur_trans: ', cur_trans)
+                cur_rot = player_measurements.transform.rotation
+                print('cur_rot: ', cur_rot)
+                pose_txt_obj.write('%f %f %f ' % (cur_trans.x, cur_trans.y, cur_trans.z))
+                pose_txt_obj.write('%f %f %f\n' % (cur_rot.pitch, cur_rot.roll, cur_rot.yaw))
 
             # Now we have to send the instructions to control the vehicle.
             # If we are in synchronous mode the server will pause the
@@ -349,6 +370,9 @@ def run_carla_client(args):
                 control = measurements.player_measurements.autopilot_control
                 control.steer += random.uniform(-0.1, 0.1)
                 client.send_control(control)
+                
+        if args.writepose:
+            pose_txt_obj.close()
     
     lane_detection.kill()
 
@@ -417,6 +441,10 @@ def main():
         dest='settings_filepath',
         default=None,
         help='Path to a "CarlaSettings.ini" file')
+    argparser.add_argument(
+        '-w', '--writepose',
+        action='store_true',
+        help='enable writepose (6DOF to txt)')
 
     args = argparser.parse_args()
 

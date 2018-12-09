@@ -108,6 +108,10 @@ def run_carla_client(args):
         client.start_episode(player_start)
         px_l = -1
         py_l = -1
+
+        if args.writepose:
+            pose_txt_obj = open('pose.txt', 'w')
+
         # Iterate every frame in the episode.
         for frame in range(0, frames_per_episode):
 
@@ -130,6 +134,15 @@ def run_carla_client(args):
             #     depth_array = sensor_data['CameraDepth'].data
             #     value_at_pixel = depth_array[Y, X]
             #
+
+            if args.writepose:
+                player_measurements = measurements.player_measurements
+                cur_trans = player_measurements.transform.location
+                print('cur_trans: ', cur_trans)
+                cur_rot = player_measurements.transform.rotation
+                print('cur_rot: ', cur_rot)
+                pose_txt_obj.write('%f %f %f ' % (cur_trans.x, cur_trans.y, cur_trans.z))
+                pose_txt_obj.write('%f %f %f\n' % (cur_rot.pitch, cur_rot.roll, cur_rot.yaw))
 
             # Now we have to send the instructions to control the vehicle.
             # If we are in synchronous mode the server will pause the
@@ -201,6 +214,9 @@ def run_carla_client(args):
                 control.steer += random.uniform(-0.1, 0.1)
                 client.send_control(control)
 
+        if args.writepose:
+            pose_txt_obj.close()
+
 
 def print_measurements(measurements):
     number_of_agents = len(measurements.non_player_agents)
@@ -266,6 +282,10 @@ def main():
         dest='settings_filepath',
         default=None,
         help='Path to a "CarlaSettings.ini" file')
+    argparser.add_argument(
+        '-w', '--writepose',
+        action='store_true',
+        help='enable writepose (6DOF to txt)')
 
     args = argparser.parse_args()
 
