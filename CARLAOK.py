@@ -15,6 +15,7 @@ import logging
 import random
 import time
 
+import sys # for printing frame number on the same line in terminal under autopilot mode
 import os
 # from time import sleep
 import struct     # for parsing binaries to float
@@ -59,12 +60,9 @@ def send_image(pixelarray):
 
 
 def run_carla_client(args):
-    if not args.autopilot:
-        lane_detection = Popen(["/home/minghanz/lane-detection/newcheck/SFMotor/lane detection/lane-detection"],
-                                cwd="/home/minghanz/lane-detection/newcheck/SFMotor/lane detection")
 
     # Here we will run 3 episodes with 300 frames each.
-    # number_of_episodes = 3
+    number_of_episodes = 10
     frames_per_episode = 10000
 
     # We assume the CARLA server is already waiting for a client to connect at
@@ -72,309 +70,323 @@ def run_carla_client(args):
     # context manager, it creates a CARLA client object and starts the
     # connection. It will throw an exception if something goes wrong. The
     # context manager makes sure the connection is always cleaned up on exit.
+
     with make_carla_client(args.host, args.port) as client:
         print('CarlaClient connected')
 
-        # for episode in range(0, number_of_episodes):
-           # Start a new episode.
-
-        if args.settings_filepath is None:
-
-            # Create a CarlaSettings object. This object is a wrapper around
-            # the CarlaSettings.ini file. Here we set the configuration we
-            # want for the new episode.
-            settings = CarlaSettings()
-            settings.set(
-                SynchronousMode=True,
-                SendNonPlayerAgentsInfo=True,
-                NumberOfVehicles=0,                         # 20
-                NumberOfPedestrians=0,                      # 40
-                WeatherId=2,                              # random.choice([1, 3, 7, 8, 14]),
-                QualityLevel=args.quality_level ) #, 
-                # MapName = 'Town01' )
-            settings.randomize_seeds()
-            # 1 (with shadow) sunny, 2 bright cloudy, 3 (with shadow), after rain, 4 (ambient light) after rain, 
-            # 5 middle rain, 6 big rain, 7 small rain, 8 dark, 9 cloudy, 
-            # 10(cloudy) 11(sunny) after rain, 12 13 rain, 
-
-            # Now we want to add a couple of cameras to the player vehicle.
-            # We will collect the images produced by these cameras every
-            # frame.
-
-            # # The default camera captures RGB images of the scene.
-            camera0 = Camera('CameraRGB') # , PostProcessing='None'
-            # Set image resolution in pixels.
-            camera0.set_image_size(800, 600)
-            # Set its position relative to the car in meters.
-            camera0.set_position(0.3, 0, 2.30) # 0.3, 0, 1.3
-            settings.add_sensor(camera0)
-
-            # Let's add another camera producing ground-truth depth.
-            camera2 = Camera('CameraDepth', PostProcessing='Depth')
-            camera2.set_image_size(800, 600)
-            camera2.set_position(0.30, 0, 2.30)
-            settings.add_sensor(camera2)
-
-            camera3 = Camera('CameraSemantics', PostProcessing='SemanticSegmentation')
-            camera3.set_image_size(800, 600)
-            camera3.set_position(0.30, 0, 2.30)
-            settings.add_sensor(camera3)
-
-            if args.lidar:
-                lidar = Lidar('Lidar32')
-                lidar.set_position(0, 0, 2.50)
-                lidar.set_rotation(0, 0, 0)
-                lidar.set(
-                    Channels=32,
-                    Range=50,
-                    PointsPerSecond=100000,
-                    RotationFrequency=20,
-                    UpperFovLimit=10,
-                    LowerFovLimit=-30)
-                settings.add_sensor(lidar)
-
-        else:
-
-            # Alternatively, we can load these settings from a file.
-            with open(args.settings_filepath, 'r') as fp:
-                settings = fp.read()
-
-        # Now we load these settings into the server. The server replies
-        # with a scene description containing the available start spots for
-        # the player. Here we can provide a CarlaSettings object or a
-        # CarlaSettings.ini file as string.
-        scene = client.load_settings(settings)
-
-        # Choose one player start at random.
-        # number_of_player_starts = len(scene.player_start_spots)
-        # player_start = random.randint(0, max(0, number_of_player_starts - 1))
-        player_start = 31
-
-        # Notify the server that we want to start the episode at the
-        # player_start index. This function blocks until the server is ready
-        # to start the episode.
-        print('Starting new episode...')
-        client.start_episode(player_start)
-        px_l = -1
-        py_l = -1
-        ######### Parameters for one test
-        lc_num = 0
-        lc_hold = False
-        lc_start_turn = False
-        lc_num_2 = 100 # for counting failures in turning
-        lc_num_3 = 0
-        #############
-
-        if args.writepose:
-            pose_txt_obj = open('pose.txt', 'w')
-
-        # Iterate every frame in the episode.
-        for frame in range(0, frames_per_episode):
-
-            # Read the data produced by the server this frame.
-            measurements, sensor_data = client.read_data()
-
-            #ZYX LIDAR
-            # if True: #not lc_hold:
-            #     result = run_cpp(sensor_data['Lidar32'].point_cloud, True)
-            #     #print('LP:',LP,'END')
-                
-            #     lidar_success = False
-            #     if result:
-            #         lidar_success = True
-            #         pts, kb, hdx, tlx = result
-
-            # print('pts:',pts)
-            # print('kb:',kb)
-            # print('hdx:',hdx)
-            # print('tlx:',tlx)
-            print('------------------------%d'%(frame))
-
-            #ZYX LIDAR
+        for i_episode in range(0, number_of_episodes):
+        # Start a new episode.
 
             if not args.autopilot:
-                image = sensor_data['CameraRGB'].data
-                lane_coef = send_image(image)
-                print("lane_coef: ", lane_coef)
+                lane_detection = Popen(["/home/minghanz/lane-detection/newcheck/SFMotor/lane detection/lane-detection"],
+                                    cwd="/home/minghanz/lane-detection/newcheck/SFMotor/lane detection")
 
-            # Print some of the measurements.
-            #print_measurements(measurements)
+            if args.settings_filepath is None:
 
-            # Save the images to disk if requested.
-            if args.save_images_to_disk:
-                for name, measurement in sensor_data.items():
-                    filename = args.out_filename_format.format(0, name, frame) # episode
-                    measurement.save_to_disk(filename)
+                # Create a CarlaSettings object. This object is a wrapper around
+                # the CarlaSettings.ini file. Here we set the configuration we
+                # want for the new episode.
+                weather_ID = random.choice(range(0, 15))
+                settings = CarlaSettings()
+                settings.set(
+                    SynchronousMode=True,
+                    SendNonPlayerAgentsInfo=True,
+                    NumberOfVehicles=0,                         # 20
+                    NumberOfPedestrians=0,                      # 40
+                    WeatherId= weather_ID,# 2,                     # random.choice([1, 3, 7, 8, 14]),
+                    QualityLevel=args.quality_level ) #, 
+                    # MapName = 'Town01' )
+                settings.randomize_seeds()
+                # 1 (with shadow) sunny, 2 bright cloudy, 3 (with shadow), after rain, 4 (ambient light) after rain, 
+                # 5 middle rain, 6 big rain, 7 small rain, 8 dark, 9 cloudy, 
+                # 10(cloudy) 11(sunny) after rain, 12 13 rain, 
 
-            # We can access the encoded data of a given image as numpy
-            # array using its "data" property. For instance, to get the
-            # depth value (normalized) at pixel X, Y
-            #
-            #     depth_array = sensor_data['CameraDepth'].data
-            #     value_at_pixel = depth_array[Y, X]
-            #
+                # Now we want to add a couple of cameras to the player vehicle.
+                # We will collect the images produced by these cameras every
+                # frame.
 
-            if args.writepose:
-                player_measurements = measurements.player_measurements
-                cur_trans = player_measurements.transform.location
-                print('cur_trans: ', cur_trans)
-                cur_rot = player_measurements.transform.rotation
-                print('cur_rot: ', cur_rot)
-                pose_txt_obj.write('%f %f %f ' % (cur_trans.x, cur_trans.y, cur_trans.z))
-                pose_txt_obj.write('%f %f %f\n' % (cur_rot.pitch, cur_rot.roll, cur_rot.yaw))
+                # # The default camera captures RGB images of the scene.
+                camera0 = Camera('CameraRGB') # , PostProcessing='None'
+                # Set image resolution in pixels.
+                camera0.set_image_size(800, 600)
+                # Set its position relative to the car in meters.
+                camera0.set_position(0.3, 0, 2.30) # 0.3, 0, 1.3
+                settings.add_sensor(camera0)
 
-            # Now we have to send the instructions to control the vehicle.
-            # If we are in synchronous mode the server will pause the
-            # simulation until we send this control.
+                # Let's add another camera producing ground-truth depth.
+                camera2 = Camera('CameraDepth', PostProcessing='Depth')
+                camera2.set_image_size(800, 600)
+                camera2.set_position(0.30, 0, 2.30)
+                settings.add_sensor(camera2)
 
-            if not args.autopilot:
-                player_measurements = measurements.player_measurements
-                pos_x=player_measurements.transform.location.x
-                pos_y=player_measurements.transform.location.y
-                speed=player_measurements.forward_speed * 3.6
+                camera3 = Camera('CameraSemantics', PostProcessing='SemanticSegmentation')
+                camera3.set_image_size(800, 600)
+                camera3.set_position(0.30, 0, 2.30)
+                settings.add_sensor(camera3)
 
-                #Traffic Light
-                # print('TrafficLight:-----------------')
-                # for agent in measurements.non_player_agents:
-                #     if agent.HasField('traffic_light'):
-                #         print(agent.id)
-                #         print(agent.traffic_light.transform)
-                #         print(agent.traffic_light.state)
-                #         print('-----------------')
-                #         break
+                if args.lidar:
+                    lidar = Lidar('Lidar32')
+                    lidar.set_position(0, 0, 2.50)
+                    lidar.set_rotation(0, 0, 0)
+                    lidar.set(
+                        Channels=32,
+                        Range=50,
+                        PointsPerSecond=100000,
+                        RotationFrequency=20,
+                        UpperFovLimit=10,
+                        LowerFovLimit=-30)
+                    settings.add_sensor(lidar)
 
-                #Traffic Light End
-
-
-
-                if px_l == -1:
-                    px_l = pos_x
-                if py_l == -1:
-                    py_l = pos_y
-                delta_x = pos_x-px_l
-                delta_y = pos_y-py_l
-                st = 0
-                #if pos_y < 11:
-                 #   st = 0.3
-
-                # if lidar_success and hdx[0]<-2.2: 
-                #     lc_num += 1
-                # else:
-                #     lc_num = 0
-
-                # if lc_hold:
-                #     st = 0.3
-
-                # if lc_num>2 and not lc_hold:
-                #     lc_hold = True
-                #     st = 0.2
-
-
-                # if  abs(lane_coef[2]) > 0.003 and frame > 100:
-                #     lc_num += 1
-                # else:
-                #     lc_num = 0
-
-                # if lc_num>5 and not lc_start_turn:
-                #     lc_start_turn = True
-
-                # if lc_start_turn and lane_coef[0] == 0:
-                #     lc_num_2 += 1
-                
-                # if lc_hold:
-                #     st = 0.3
-
-                # if lc_num_2 > 5 and not lc_hold:
-                #     lc_hold = True
-                #     st = 0.25
-
-
-
-                if  abs(lane_coef[2]) > 0.003 and frame > 300:
-                    lc_num += 1
-                else:
-                    lc_num = 0
-
-                if lc_num>5 and not lc_start_turn:
-                    lc_start_turn = True
-                    lc_num_2 = 17
-                
-                if lc_start_turn and lc_num_2 > 0:
-                    lc_num_2 -= 1
-                
-                if lc_hold:
-                    st = 0.3
-
-                if lc_num_2 == 0 and not lc_hold:
-                    lc_hold = True
-                    st = 0.25
-                
-
-                # print('lidar_success:', lidar_success )
-                print('lc_num:',lc_num)
-                print('lc_num_2:',lc_num_2)
-
-                if lc_hold and lane_coef[0] != 0:
-                    a1 = lane_coef[1]+lane_coef[4]
-                    a2 = lane_coef[0]+lane_coef[3] - 0.2
-                    l = 5
-                    k = 0.08
-                    st = k*(a1*l+a2)
-                    print('a1:',a1)
-                    print('a2:',a2)
-                   
-                
-                
-
-                if speed > 28:
-                    br = (speed-28)*0.1
-                    thr = 0
-                else:
-                    br = 0
-                    thr = (28-speed)*0.05 + 0.6
-                # if pos_y > 150:
-                #     thr = 1.6
-                #     br = 0
-
-                if lc_hold:
-                    lc_num_3 += 1
-                print('lc_num_3:',lc_num_3)
-
-                if lc_num_3 > 185:
-                    thr = 0
-                    br = 1
-                    st = 0
-               # if pos_x > 5:
-               #     st = -delta_y*10 + (2-pos_y)*0.8
-               # if abs(st)<0.001:
-              #      st = 0
-                    #st = (2-pos_y)*0.01
-                print('Steering:',st)
-                client.send_control(
-                    #steer=random.uniform(-1.0, 1.0),
-                    steer=st,
-                    throttle=thr,
-                    brake=br,
-                    hand_brake=False,
-                    reverse=False)
-                px_l = pos_x
-                py_l = pos_y
             else:
 
-                # Together with the measurements, the server has sent the
-                # control that the in-game autopilot would do this frame. We
-                # can enable autopilot by sending back this control to the
-                # server. We can modify it if wanted, here for instance we
-                # will add some noise to the steer.
+                # Alternatively, we can load these settings from a file.
+                with open(args.settings_filepath, 'r') as fp:
+                    settings = fp.read()
 
-                control = measurements.player_measurements.autopilot_control
-                control.steer += random.uniform(-0.1, 0.1)
-                client.send_control(control)
-                
-        if args.writepose:
-            pose_txt_obj.close()
-    
-    lane_detection.kill()
+            # Now we load these settings into the server. The server replies
+            # with a scene description containing the available start spots for
+            # the player. Here we can provide a CarlaSettings object or a
+            # CarlaSettings.ini file as string.
+            scene = client.load_settings(settings)
+
+            # Choose one player start at random.
+            number_of_player_starts = len(scene.player_start_spots)
+            player_start = random.randint(0, max(0, number_of_player_starts - 1))
+            # player_start = 31
+
+            # Notify the server that we want to start the episode at the
+            # player_start index. This function blocks until the server is ready
+            # to start the episode.
+            print('\rStarting new episode %d...weather: %d, player_start: %d'%(i_episode, weather_ID, player_start))
+            client.start_episode(player_start)
+            px_l = -1
+            py_l = -1
+            ######### Parameters for one test
+            lc_num = 0
+            lc_hold = False
+            lc_start_turn = False
+            lc_num_2 = 100 # for counting failures in turning
+            lc_num_3 = 0
+            #############
+
+            if args.writepose:
+                pose_txt_obj = open('pose_episode_%d.txt'%(i_episode), 'w')
+
+            # Iterate every frame in the episode.
+            for frame in range(0, frames_per_episode):
+
+                # Read the data produced by the server this frame.
+                measurements, sensor_data = client.read_data()
+
+                #ZYX LIDAR
+                # if True: #not lc_hold:
+                #     result = run_cpp(sensor_data['Lidar32'].point_cloud, True)
+                #     #print('LP:',LP,'END')
+                    
+                #     lidar_success = False
+                #     if result:
+                #         lidar_success = True
+                #         pts, kb, hdx, tlx = result
+
+                # print('pts:',pts)
+                # print('kb:',kb)
+                # print('hdx:',hdx)
+                # print('tlx:',tlx)
+                if args.autopilot:
+                    if measurements.player_measurements.forward_speed > 1:
+                        sys.stdout.write('\r------------------------%d Running'%(frame))
+                    else:
+                        sys.stdout.write('\r------------------------%d Stopped'%(frame))
+                    sys.stdout.flush()
+                else:
+                    print('------------------------%d'%(frame))
+
+                #ZYX LIDAR
+
+                if not args.autopilot:
+                    image = sensor_data['CameraRGB'].data
+                    lane_coef = send_image(image)
+                    print("lane_coef: ", lane_coef)
+
+                # Print some of the measurements.
+                #print_measurements(measurements)
+
+                # Save the images to disk if requested.
+                if args.save_images_to_disk and measurements.player_measurements.forward_speed > 1:
+                    for name, measurement in sensor_data.items():
+                        filename = args.out_filename_format.format(i_episode, weather_ID, name, frame) # episode
+                        measurement.save_to_disk(filename)
+
+                # We can access the encoded data of a given image as numpy
+                # array using its "data" property. For instance, to get the
+                # depth value (normalized) at pixel X, Y
+                #
+                #     depth_array = sensor_data['CameraDepth'].data
+                #     value_at_pixel = depth_array[Y, X]
+                #
+
+                if args.writepose:
+                    player_measurements = measurements.player_measurements
+                    cur_trans = player_measurements.transform.location
+                    print('cur_trans: ', cur_trans)
+                    cur_rot = player_measurements.transform.rotation
+                    print('cur_rot: ', cur_rot)
+                    pose_txt_obj.write('%f %f %f ' % (cur_trans.x, cur_trans.y, cur_trans.z))
+                    pose_txt_obj.write('%f %f %f\n' % (cur_rot.pitch, cur_rot.roll, cur_rot.yaw))
+
+                # Now we have to send the instructions to control the vehicle.
+                # If we are in synchronous mode the server will pause the
+                # simulation until we send this control.
+
+                if not args.autopilot:
+                    player_measurements = measurements.player_measurements
+                    pos_x=player_measurements.transform.location.x
+                    pos_y=player_measurements.transform.location.y
+                    speed=player_measurements.forward_speed * 3.6
+
+                    #Traffic Light
+                    # print('TrafficLight:-----------------')
+                    # for agent in measurements.non_player_agents:
+                    #     if agent.HasField('traffic_light'):
+                    #         print(agent.id)
+                    #         print(agent.traffic_light.transform)
+                    #         print(agent.traffic_light.state)
+                    #         print('-----------------')
+                    #         break
+
+                    #Traffic Light End
+
+
+
+                    if px_l == -1:
+                        px_l = pos_x
+                    if py_l == -1:
+                        py_l = pos_y
+                    delta_x = pos_x-px_l
+                    delta_y = pos_y-py_l
+                    st = 0
+                    #if pos_y < 11:
+                    #   st = 0.3
+
+                    # if lidar_success and hdx[0]<-2.2: 
+                    #     lc_num += 1
+                    # else:
+                    #     lc_num = 0
+
+                    # if lc_hold:
+                    #     st = 0.3
+
+                    # if lc_num>2 and not lc_hold:
+                    #     lc_hold = True
+                    #     st = 0.2
+
+
+                    # if  abs(lane_coef[2]) > 0.003 and frame > 100:
+                    #     lc_num += 1
+                    # else:
+                    #     lc_num = 0
+
+                    # if lc_num>5 and not lc_start_turn:
+                    #     lc_start_turn = True
+
+                    # if lc_start_turn and lane_coef[0] == 0:
+                    #     lc_num_2 += 1
+                    
+                    # if lc_hold:
+                    #     st = 0.3
+
+                    # if lc_num_2 > 5 and not lc_hold:
+                    #     lc_hold = True
+                    #     st = 0.25
+
+
+
+                    if  abs(lane_coef[2]) > 0.003 and frame > 300:
+                        lc_num += 1
+                    else:
+                        lc_num = 0
+
+                    if lc_num>5 and not lc_start_turn:
+                        lc_start_turn = True
+                        lc_num_2 = 17
+                    
+                    if lc_start_turn and lc_num_2 > 0:
+                        lc_num_2 -= 1
+                    
+                    if lc_hold:
+                        st = 0.3
+
+                    if lc_num_2 == 0 and not lc_hold:
+                        lc_hold = True
+                        st = 0.25
+                    
+
+                    # print('lidar_success:', lidar_success )
+                    print('lc_num:',lc_num)
+                    print('lc_num_2:',lc_num_2)
+
+                    if lc_hold and lane_coef[0] != 0:
+                        a1 = lane_coef[1]+lane_coef[4]
+                        a2 = lane_coef[0]+lane_coef[3] - 0.2
+                        l = 5
+                        k = 0.08
+                        st = k*(a1*l+a2)
+                        print('a1:',a1)
+                        print('a2:',a2)
+                    
+                    
+                    
+
+                    if speed > 28:
+                        br = (speed-28)*0.1
+                        thr = 0
+                    else:
+                        br = 0
+                        thr = (28-speed)*0.05 + 0.6
+                    # if pos_y > 150:
+                    #     thr = 1.6
+                    #     br = 0
+
+                    if lc_hold:
+                        lc_num_3 += 1
+                    print('lc_num_3:',lc_num_3)
+
+                    if lc_num_3 > 185:
+                        thr = 0
+                        br = 1
+                        st = 0
+                # if pos_x > 5:
+                #     st = -delta_y*10 + (2-pos_y)*0.8
+                # if abs(st)<0.001:
+                #      st = 0
+                        #st = (2-pos_y)*0.01
+                    print('Steering:',st)
+                    client.send_control(
+                        #steer=random.uniform(-1.0, 1.0),
+                        steer=st,
+                        throttle=thr,
+                        brake=br,
+                        hand_brake=False,
+                        reverse=False)
+                    px_l = pos_x
+                    py_l = pos_y
+                else:
+
+                    # Together with the measurements, the server has sent the
+                    # control that the in-game autopilot would do this frame. We
+                    # can enable autopilot by sending back this control to the
+                    # server. We can modify it if wanted, here for instance we
+                    # will add some noise to the steer.
+
+                    control = measurements.player_measurements.autopilot_control
+                    control.steer += random.uniform(-0.1, 0.1)
+                    client.send_control(control)
+                    
+            if args.writepose:
+                pose_txt_obj.close()
+        
+            if not args.autopilot:
+                lane_detection.kill()
 
 
 def print_measurements(measurements):
@@ -453,7 +465,8 @@ def main():
 
     logging.info('listening to server %s:%s', args.host, args.port)
 
-    args.out_filename_format = '_out/episode_{:0>4d}/{:s}/{:0>6d}'
+    # args.out_filename_format = '_out/episode_{:0>4d}/{:s}/{:0>6d}'
+    args.out_filename_format = '_out/episode_{:0>4d}_{:0>2d}/{:s}/{:0>6d}'
 
     try:
         os.mkfifo(FIFO_IMAGES)

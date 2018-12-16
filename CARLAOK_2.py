@@ -257,12 +257,25 @@ def run_carla_client(args):
                 #plt.plot([106-pos_y,106-pos_y],[-90-pos_x,100-pos_x])
                 #plt.plot([109.5-pos_y,109.5-pos_y],[-90-pos_x,100-pos_x])
 
-                plt.plot([104-pos_y,104-pos_y],[-90-pos_x,200-pos_x])
-                plt.plot([108-pos_y,108-pos_y],[-90-pos_x,200-pos_x])
-                plt.plot([112-pos_y,112-pos_y],[-90-pos_x,200-pos_x])
+
+                # plot lanes detected
+                offset = 2.2
+                if lane_coef[0] == 0:
+                    expand = 0
+                else:
+                    expand = 0.4
+                plt.plot([lane_coef[0]-offset-expand,lane_coef[0]-offset-expand],[-90-pos_x,200-pos_x])
+                plt.plot([lane_coef[3]-offset,lane_coef[3]-offset],[-90-pos_x,200-pos_x])
+                plt.plot([lane_coef[3] + lane_coef[3] - lane_coef[0]-offset+expand,lane_coef[3] + lane_coef[3] - lane_coef[0]-offset+expand],[-90-pos_x,200-pos_x])
+
+                # plt.plot([104-pos_y,104-pos_y],[-90-pos_x,200-pos_x])
+                # plt.plot([108-pos_y,108-pos_y],[-90-pos_x,200-pos_x])
+                # plt.plot([112-pos_y,112-pos_y],[-90-pos_x,200-pos_x])
+
                 plt.plot([0],[0], '*')
                 plt.axis([-5, 5, -10, 50])
-                print("tx:",109.5-pos_y)
+                print("tx:",109.5-pos_y)               
+                
                 if come_back:
                     tx = lane_coef[3]-0.8#109.5-pos_y
                     
