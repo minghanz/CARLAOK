@@ -121,3 +121,7 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Carla
+Carlaok/yolov3/carla_out/
+Carlaok/yolov3/carla_in/

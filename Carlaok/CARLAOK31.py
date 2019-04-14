@@ -24,6 +24,7 @@ import re
 import sys
 import weakref
 import matplotlib.pyplot as plt
+import time
 
 try:
     import pygame
@@ -74,6 +75,7 @@ import carla
 from carla import ColorConverter as cc
 from agents.navigation.roaming_agent import *
 from agents.navigation.basic_agent import *
+from agents.visualization.dashpage import run_thread, data_append
 
 
 # ==============================================================================
@@ -778,6 +780,8 @@ def main():
 
     print(__doc__)
     actor_list = []
+
+    run_thread()
     try:
 
         game_loop(args)

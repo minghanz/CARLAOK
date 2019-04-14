@@ -25,6 +25,7 @@ from agents.tools.misc import distance_vehicle, get_speed
 from agents.tools.clock import WorldClock
 from agents.tools.subscriber import lidar as ulidar
 from agents.tools.subscriber import camera as ucamera
+from agents.visualization.dashpage import data_append
 
 class PercpVeh():
     def __init__(self):
@@ -204,7 +205,7 @@ class LocalPlanner(object):
         self._total_running_time = 0.0
 
 
-        self._perception_enable = False
+        self._perception_enable = True
         self._marker_color_lidar = carla.Color()
         self._marker_color_camera = carla.Color()
         self._marker_color_filter = carla.Color()
@@ -1158,10 +1159,67 @@ class LocalPlanner(object):
         with open(fname_control, 'a') as file:
             file.write('%.2f %.2f %.2f %.2f %.2f %.2f\n'%(self._RL_state.ego_x, self._RL_state.ego_y, self._RL_state.ego_speed, control.throttle, control.brake, control.steer))
 
-            
+    def update_data(self, control):
 
-                
-        ##### true information value
+        veh_percp_list_true = [
+            self._RL_state.front_vehicle_inside, 
+            self._RL_state.front_vehicle_outside, 
+            self._RL_state.behind_vehicle_inside, 
+            self._RL_state.behind_vehicle_outside]
+
+        dist_func_true = [lambda x: self._r1*(x), 
+            lambda x: self._r2*(x), 
+            lambda x: self._r1*(2*np.pi-x), 
+            lambda x: self._r2*(2*np.pi-x) ]
+
+        veh_percp_list_true_data = []
+
+        for i, veh in enumerate(veh_percp_list_true):
+            if veh is None:
+                veh_percp_list_true_data.append((np.nan, np.nan))
+            else:
+                loc = veh.get_location()
+                velo = veh.get_velocity()
+                speed = get_speed(veh)
+
+                theta_target_vehicle = np.arctan2(loc.y-self._cy,loc.x-self._cx)
+                ego_loc = self._vehicle.get_location()
+                theta_ego_vehicle = np.arctan2(ego_loc.y-self._cy,ego_loc.x-self._cx)
+                dtheta = (-theta_target_vehicle + theta_ego_vehicle) % (2*np.pi)
+
+                distance = dist_func_true[i](dtheta)
+            
+                veh_percp_list_true_data.append((speed, distance))
+        
+        data_append(
+            time=self._total_running_time,
+            throttle=control.throttle,
+            brake=control.brake,
+            steering=control.steer,
+            speed=self._RL_state.ego_speed,
+
+            enable_safeguard=self._rulebased_signal,
+            enable_perception=self._perception_enable,
+            enable_aggressive=self._aggressive,
+
+            dist_inner_behind_true=veh_percp_list_true_data[2][1] if veh_percp_list_true_data[2][1] < 200 else np.nan,
+            dist_inner_behind_perc=self._RL_state.behind_vehicle_inside_distance if self._RL_state.behind_vehicle_inside_distance < 200 else np.nan,
+            dist_inner_front_true=veh_percp_list_true_data[0][1] if veh_percp_list_true_data[0][1] < 200 else np.nan,
+            dist_inner_front_perc=self._RL_state.front_vehicle_inside_distance if self._RL_state.front_vehicle_inside_distance < 200 else np.nan,
+            dist_outer_front_true=veh_percp_list_true_data[1][1] if veh_percp_list_true_data[1][1] < 200 else np.nan,
+            dist_outer_front_perc=self._RL_state.front_vehicle_outside_distance if self._RL_state.front_vehicle_outside_distance < 200 else np.nan,
+            dist_outer_behind_true=veh_percp_list_true_data[3][1] if veh_percp_list_true_data[3][1] < 200 else np.nan,
+            dist_outer_behind_perc=self._RL_state.behind_vehicle_outside_distance if self._RL_state.behind_vehicle_outside_distance < 200 else np.nan,
+
+            speed_inner_behind_true=veh_percp_list_true_data[2][0] if veh_percp_list_true_data[2][1] < 200 else np.nan,
+            speed_inner_behind_perc=self._RL_state.behind_vehicle_inside_speed if self._RL_state.behind_vehicle_inside_distance < 200 else np.nan,
+            speed_inner_front_true=veh_percp_list_true_data[0][0] if veh_percp_list_true_data[0][1] < 200 else np.nan,
+            speed_inner_front_perc=self._RL_state.front_vehicle_inside_speed if self._RL_state.front_vehicle_inside_distance < 200 else np.nan,
+            speed_outer_front_true=veh_percp_list_true_data[1][0] if veh_percp_list_true_data[1][1] < 200 else np.nan,
+            speed_outer_front_perc=self._RL_state.front_vehicle_outside_speed if self._RL_state.front_vehicle_outside_distance < 200 else np.nan,
+            speed_outer_behind_true=veh_percp_list_true_data[3][0] if veh_percp_list_true_data[3][1] < 200 else np.nan,
+            speed_outer_behind_perc=self._RL_state.behind_vehicle_outside_speed if self._RL_state.behind_vehicle_outside_distance < 200 else np.nan,
+        )
 
 
     def _generate_waypoint_location(self, waypoint, r_t):
@@ -1279,7 +1337,8 @@ class LocalPlanner(object):
         control = self._vehicle_controller.run_step(self._target_speed, waypoint_location, self._dt_real)
 
         # record perception and control
-        self.record_data(control)
+        # self.record_data(control)
+        self.update_data(control)
 
         # purge the queue of obsolete waypoints
         vehicle_transform = self._vehicle.get_transform()

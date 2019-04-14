@@ -1,19 +1,17 @@
-import sys, os, glob, threading
+import sys, os, glob, threading, shutil, cv2
 
-sys.path.append("/home/jacobz/Carla/binary_0.9.4/PythonAPI")
-sys.path.append("/home/jacobz/Carla/binary_0.9.4/PythonAPI/carla-0.9.4-py3.5-linux-x86_64.egg")
+sys.path.append("../PythonAPI")
+sys.path.append("../PythonAPI/carla-0.9.4-py3.5-linux-x86_64.egg")
 
 import carla
-# import detector
 from carla import ColorConverter as cc
-from agents.navigation.roaming_agent import *
-from agents.navigation.basic_agent import *
+# from agents.navigation.roaming_agent import *
+# from agents.navigation.basic_agent import *
 
-import numpy
-# import pcl
+import numpy as np
 import time
 
-from detect_func import *
+# from detect_func import *
 
 # host = "192.168.1.13" # Local
 # host = "35.3.70.70"
@@ -30,9 +28,9 @@ class Camera(threading.Thread):
         # self.yolo = detect()
         self.frame_id = 0
         
-        if os.path.exists("carla_in"):
-            shutil.rmtree("carla_in")  # delete output folder
-        os.makedirs("carla_in")  # make new output folder
+        if os.path.exists("yolov3/carla_in"):
+            shutil.rmtree("yolov3/carla_in")  # delete output folder
+        os.makedirs("yolov3/carla_in")  # make new output folder
         print("entering...")
 
         # Add sensor
@@ -81,7 +79,7 @@ class Camera(threading.Thread):
         array = np.reshape(array, (message.height, message.width, 4))
         array = np.ascontiguousarray(array[:, :, :3])
         # option 1: save to disk
-        cv2.imwrite("carla_in/frame.jpg", array)
+        cv2.imwrite("yolov3/carla_in/frame.jpg", array)
         # option2: send to another thread
         # array = array[:, :, ::-1]
         # detections = self.yolo.run(array, frame_id = self.frame_id)
