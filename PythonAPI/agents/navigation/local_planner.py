@@ -16,6 +16,8 @@ import numpy as np
 
 import carla
 
+import os
+
 #from agents.navigation.controller import VehiclePIDController
 from agents.navigation.controller import VehiclePIDController_Nowaypoint
 from agents.tools.misc import distance_vehicle, draw_waypoints
@@ -127,6 +129,11 @@ class Driving_State(object):
         self.behind_vehicle_outside_direction = 0.0
         self.behind_vehicle_outside_speed = 0.0
 
+        self.front_vehicle_inside_percp = None
+        self.front_vehicle_outside_percp = None
+        self.behind_vehicle_inside_percp = None
+        self.behind_vehicle_outside_percp = None
+
 class LocalPlanner(object):
     """
     LocalPlanner implements the basic behavior of following a trajectory of waypoints that is generated on-the-fly.
@@ -194,6 +201,8 @@ class LocalPlanner(object):
         self._RL_state = Driving_State
         self._aggressive = True
         self._rulebased_signal = False
+        self._total_running_time = 0.0
+
 
         self._perception_enable = False
         self._marker_color_lidar = carla.Color()
@@ -786,6 +795,11 @@ class LocalPlanner(object):
         behind_vehicle_outside_distance = 1000
         behind_vehicle_outside_speed = 0.0
 
+        front_vehicle_inside_percp = None
+        front_vehicle_outside_percp = None
+        behind_vehicle_inside_percp = None
+        behind_vehicle_outside_percp = None
+
         if self._perception_enable:
             for target_vehicle, percp_veh in matched_car: #for target_vehicle in vehicle_list:
                 if target_vehicle.id == self._vehicle.id:
@@ -815,11 +829,15 @@ class LocalPlanner(object):
                         front_vehicle_inside_speed = target_vehicle_speed
                         front_vehicle_inside_direction = cosangle
 
+                        front_vehicle_inside_percp = percp_veh
+
                     behind_distance = self._r1*(2*np.pi-dtheta)
                     if behind_distance < behind_vehicle_inside_distance:
                         behind_vehicle_inside_distance = behind_distance
                         behind_vehicle_inside = target_vehicle
                         behind_vehicle_inside_speed = target_vehicle_speed
+                        
+                        behind_vehicle_inside_percp = percp_veh
 
                     if cosangle < -0.1 and target_vehicle_speed > prediction_threshold:
                         distance = self._r2*(dtheta)
@@ -829,6 +847,7 @@ class LocalPlanner(object):
                             front_vehicle_outside_speed = target_vehicle_speed
                             front_vehicle_outside_direction = cosangle
 
+                            front_vehicle_outside_percp = percp_veh
 
                 if distance_to_roundabout >= self._r1 + 1 and distance_to_roundabout < self._r2 + 4:
                     distance = self._r2*(dtheta)
@@ -838,11 +857,15 @@ class LocalPlanner(object):
                         front_vehicle_outside_speed = target_vehicle_speed
                         front_vehicle_outside_direction = cosangle
 
+                        front_vehicle_outside_percp = percp_veh
+
                     behind_distance = self._r2*(2*np.pi-dtheta)
                     if behind_distance < behind_vehicle_outside_distance:
                         behind_vehicle_outside_distance = behind_distance
                         behind_vehicle_outside = target_vehicle
                         behind_vehicle_outside_speed = target_vehicle_speed
+
+                        behind_vehicle_outside_percp = percp_veh
 
                 if distance_to_roundabout >= self._r1 + 1 and distance_to_roundabout < self._r2 + 13:
                     if cosangle > 0.2 and target_vehicle_speed > prediction_threshold:
@@ -853,6 +876,8 @@ class LocalPlanner(object):
                             front_vehicle_inside_speed = target_vehicle_speed
                             front_vehicle_inside_direction = cosangle
 
+                            front_vehicle_inside_percp = percp_veh
+
 
                 if distance_to_roundabout >= self._r2 + 1 and distance_to_roundabout < self._r2 + 13:
                     if cosangle > 0.2 and target_vehicle_speed > prediction_threshold:
@@ -862,6 +887,8 @@ class LocalPlanner(object):
                             front_vehicle_outside = target_vehicle
                             front_vehicle_outside_speed = target_vehicle_speed
                             front_vehicle_outside_direction = cosangle
+
+                            front_vehicle_outside_percp = percp_veh
         
         else:
             for target_vehicle in vehicle_list:
@@ -975,12 +1002,18 @@ class LocalPlanner(object):
         self._RL_state.behind_vehicle_outside = behind_vehicle_outside
         self._RL_state.behind_vehicle_outside_distance = behind_vehicle_outside_distance
         self._RL_state.behind_vehicle_outside_speed = behind_vehicle_outside_speed
+
+        self._RL_state.front_vehicle_inside_percp = front_vehicle_inside_percp
+        self._RL_state.front_vehicle_outside_percp = front_vehicle_outside_percp
+        self._RL_state.behind_vehicle_inside_percp = behind_vehicle_inside_percp
+        self._RL_state.behind_vehicle_outside_percp = behind_vehicle_outside_percp
         
         
         """
         Rule-based decision:
         """
         self._decision_time_accumulation += self._dt_real
+        self._total_running_time += self._dt_real
 
         #IDM_v_inside = self._IDM_desired_speed(front_vehicle_inside,front_vehicle_inside_distance,self._dt_real)
         #IDM_v_outside = self._IDM_desired_speed(front_vehicle_outside,front_vehicle_outside_distance,self._dt_real)
@@ -1038,6 +1071,98 @@ class LocalPlanner(object):
 
         #print(self._inroundabout_lane, self._r_target, IDM_v)
            # self._decision_time_accumulation,front_vehicle_inside_distance,front_vehicle_outside_distance,self._vehicle.id)
+
+
+    def record_data(self, control):
+
+        front_inside_folder = 'front_in'
+        front_outside_folder = 'front_out'
+        behind_inside_folder = 'behind_in'
+        behind_outside_folder = 'behind_out'
+        obs_folder = 'obs'
+        true_folder = 'true'
+        fname_xy = 'xy_vxvy.txt'
+        fname_direc_front = 'direction_frontvehonly.txt'
+        fname_time = 'timestamp.txt'
+        fname_control = 'control.txt'
+        
+        folder_list = [front_inside_folder, front_outside_folder, behind_inside_folder, behind_outside_folder]
+        veh_percp_list = [self._RL_state.front_vehicle_inside_percp, 
+                        self._RL_state.front_vehicle_outside_percp, 
+                        self._RL_state.behind_vehicle_inside_percp, 
+                        self._RL_state.behind_vehicle_outside_percp]
+        speed_list = [self._RL_state.front_vehicle_inside_speed, 
+                        self._RL_state.front_vehicle_outside_speed, 
+                        self._RL_state.behind_vehicle_inside_speed,
+                        self._RL_state.behind_vehicle_outside_speed]
+        dist_list = [self._RL_state.front_vehicle_inside_distance, 
+                        self._RL_state.front_vehicle_outside_distance, 
+                        self._RL_state.behind_vehicle_inside_distance,
+                        self._RL_state.behind_vehicle_outside_distance]
+        ##### observation value
+        if self._perception_enable:
+            for i, folder in enumerate(folder_list):
+                with open(os.path.join(folder, obs_folder, fname_xy), 'a') as file:
+                    x = veh_percp_list[i].location.x
+                    y = veh_percp_list[i].location.y
+                    vx = veh_percp_list[i].state[2]
+                    vy = veh_percp_list[i].state[3]
+                    speed = speed_list[i]
+                    distance = dist_list[i]
+                    file.write('%.2f %.2f %.2f %.2f %.2f %.2f\n'%(x, y, vx, vy, speed, distance) )
+
+            with open(os.path.join(front_inside_folder, obs_folder, fname_direc_front), 'a') as file:
+                direction = self._RL_state.front_vehicle_inside_direction
+                file.write('%.2f \n'%(direction))
+            
+            with open(os.path.join(front_outside_folder, obs_folder, fname_direc_front, 'a')) as file:
+                direction = self._RL_state.front_vehicle_outside_direction
+                file.write('%.2f \n'%(direction))
+
+        ##### true value
+        veh_percp_list_true = [self._RL_state.front_vehicle_inside, 
+                        self._RL_state.front_vehicle_outside, 
+                        self._RL_state.behind_vehicle_inside, 
+                        self._RL_state.behind_vehicle_outside]
+
+        dist_func_true = [lambda x: self._r1*(x), 
+                        lambda x: self._r2*(x), 
+                        lambda x: self._r1*(2*np.pi-x), 
+                        lambda x: self._r2*(2*np.pi-x) ]
+
+        for i, folder in enumerate(folder_list):
+            with open(os.path.join(folder, true_folder, fname_xy), 'a') as file:
+                loc = veh_percp_list_true[i].get_location()
+                velo = veh_percp_list_true[i].get_velocity()
+                speed = get_speed(veh_percp_list_true[i])
+
+                theta_target_vehicle = np.arctan2(loc.y-self._cy,loc.x-self._cx)
+                ego_loc = self._vehicle.get_location()
+                theta_ego_vehicle = np.arctan2(ego_loc.y-self._cy,ego_loc.x-self._cx)
+                dtheta = (-theta_target_vehicle + theta_ego_vehicle) % (2*np.pi)
+
+                distance = dist_func_true[i](dtheta)
+                file.write('%.2f %.2f %.2f %.2f %.2f %.2f\n'%(loc.x, loc.y, velo.x, velo.y, speed, distance) )
+
+        with open(os.path.join(front_inside_folder, true_folder, fname_direc_front), 'a') as file:
+            direction = self._direction_to_center(self._RL_state.front_vehicle_inside)
+            file.write('%.2f \n'%(direction))
+        
+        with open(os.path.join(front_outside_folder, true_folder, fname_direc_front, 'a')) as file:
+            direction = self._direction_to_center(self._RL_state.front_vehicle_outside)
+            file.write('%.2f \n'%(direction))
+            
+        with open(fname_time, 'a') as file:
+            file.write('%.2f \n'%(self._total_running_time))
+
+        with open(fname_control, 'a') as file:
+            file.write('%.2f %.2f %.2f\n'%(control.throttle, control.brake, control.steer))
+
+            
+
+                
+        ##### true information value
+
 
     def _generate_waypoint_location(self, waypoint, r_t):
         r1 = self._r1
@@ -1153,6 +1278,8 @@ class LocalPlanner(object):
 
         control = self._vehicle_controller.run_step(self._target_speed, waypoint_location, self._dt_real)
 
+        # record perception and control
+        self.record_data(control)
 
         # purge the queue of obsolete waypoints
         vehicle_transform = self._vehicle.get_transform()
