@@ -195,7 +195,7 @@ class LocalPlanner(object):
         self._aggressive = True
         self._rulebased_signal = False
 
-        self._perception_enable = True
+        self._perception_enable = False
         self._marker_color_lidar = carla.Color()
         self._marker_color_camera = carla.Color()
         self._marker_color_filter = carla.Color()
@@ -1151,7 +1151,6 @@ class LocalPlanner(object):
         #self._target_speed = 20 #################################
         #print(self._target_speed)
 
-        print(self._target_speed)
         control = self._vehicle_controller.run_step(self._target_speed, waypoint_location, self._dt_real)
 
 
@@ -1171,6 +1170,9 @@ class LocalPlanner(object):
             #return
             #draw_waypoints(self._vehicle.get_world(), [self._target_waypoint], self._vehicle.get_location().z + 1.0)
             arrow_color=carla.Color()
+
+            # control.throttle = 0.0
+            # control.brake = 0.0
             if self._rulebased_signal:
                 arrow_color.r = 25
                 arrow_color.g = 202
@@ -1194,8 +1196,8 @@ class LocalPlanner(object):
                 theta_begin = theta_end+ d_theta
                 begin = carla.Location(x = cx+r_end *np.cos(theta_begin),y = cy+r_end *np.sin(theta_begin))
                 begin.z = 0.0
-                arrow_color=carla.Color()
-                world_draw.debug.draw_arrow(begin, end, arrow_size = sz, color = arrow_color, life_time=1)
+                # arrow_color=carla.Color()
+                world_draw.debug.draw_arrow(begin, end, thickness=0.5, arrow_size = sz, color = arrow_color, life_time=1)
 
         return control
 

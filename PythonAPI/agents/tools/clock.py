@@ -10,13 +10,15 @@ class WorldClock:
         self.time = timestamp.elapsed_seconds
         #print(self.time)
 
-    def dt(self):
+    def dt(self, wait_for_zero=True):
         #print(self.time, self.lasttime, time.time())
         if self.lasttime == None:
             self.lasttime = self.time
             return 0.05
         else:
-            ret = self.time - self.lasttime
+            ret = 0
+            while ret == 0 and wait_for_zero:
+                ret = self.time - self.lasttime
             self.lasttime = self.time
             return ret
         
