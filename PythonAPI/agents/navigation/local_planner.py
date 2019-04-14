@@ -1156,7 +1156,7 @@ class LocalPlanner(object):
             file.write('%.2f \n'%(self._total_running_time))
 
         with open(fname_control, 'a') as file:
-            file.write('%.2f %.2f %.2f\n'%(control.throttle, control.brake, control.steer))
+            file.write('%.2f %.2f %.2f %.2f %.2f %.2f\n'%(self._RL_state.ego_x, self._RL_state.ego_y, self._RL_state.ego_speed, control.throttle, control.brake, control.steer))
 
             
 
