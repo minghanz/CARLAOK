@@ -1279,7 +1279,7 @@ class LocalPlanner(object):
         control = self._vehicle_controller.run_step(self._target_speed, waypoint_location, self._dt_real)
 
         # record perception and control
-        self.record_data(control)
+        # self.record_data(control)
 
         # purge the queue of obsolete waypoints
         vehicle_transform = self._vehicle.get_transform()

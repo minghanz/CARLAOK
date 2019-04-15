@@ -16,7 +16,7 @@ import msgpack
 
 host = "127.0.0.1" # Localhost
 # host = "192.168.1.13" # Local net
-# host = "35.3.17.188" # zhong's net
+# host = "35.3.70.70" # zhong's net
 # host = "35.3.57.207" # mcity's net
 port = 2000
 vehicle_id = 65
@@ -66,15 +66,11 @@ class Lidar(threading.Thread):
     def run(self):
         if self._dovis:
             self._visualizer = pcl.Visualizer()
-            self._visport1 = self._visualizer.createViewPort(0, 0, 0.5, 1)
-            self._visport2 = self._visualizer.createViewPort(0.5, 0, 1, 1)
-            self._visualizer.addCoordinateSystem(viewport=self._visport1, scale=3)
-            self._visualizer.addCoordinateSystem(viewport=self._visport2, scale=3)
-            self._visualizer.addPointCloud(pcl.PointCloud(np.random.rand(10, 3).astype('f4')), 'lidar', viewport=self._visport2)
+            self._visualizer.addCoordinateSystem(scale=3)
             while not self._visualizer.wasStopped():
                 while not self._vistext_queue.empty():
                     t,x,y,z = self._vistext_queue.get()
-                    self._visualizer.addText3D(t, [x,y,z], viewport=self._visport1, id="t"+t)
+                    self._visualizer.addText3D(t, [x,y,z], id="t"+t)
                 self._visualizer.spinOnce(50)
         else:
             while True:
@@ -91,12 +87,13 @@ class Lidar(threading.Thread):
         time = self._clock.time
         points = np.frombuffer(message.raw_data, dtype=np.dtype('f4'))
         points = np.reshape(points, (int(points.shape[0] / 3), 3))
+        ori_cloud = pcl.PointCloud(points)
 
         if self._processing: 
-            print("Skipping cloud:", len(points), " at ", time)
+            # print("Skipping cloud:", len(points), " at ", time)
             return
         else:
-            print("Received cloud:", len(points), " at ", time)
+            # print("Received cloud:", len(points), " at ", time)
             self._processing = True
 
         # Preprocess
@@ -106,15 +103,16 @@ class Lidar(threading.Thread):
         outmask = np.linalg.norm(points[:,:2] - circle_outcenter, axis=1) < (radout + 20) # process additional 20m in radius
         points = points[inmask & outmask] # remove points alway from the circle
 
-        # Update overlook
-        cloud = pcl.PointCloud(points)
-        if self._dovis:
-            self._visualizer.updatePointCloud(cloud, 'lidar')
-            self._visualizer.removeAllShapes(viewport=self._visport1)
-            self._visualizer.removeAllPointClouds(viewport=self._visport1)
-
         # Run segmentation
-        detections = detector.run_detect(cloud, 2)
+        detections = detector.run_detect(pcl.PointCloud(points), 2)
+
+        # Update overview
+        if self._dovis:
+            self._visualizer.removeAllPointClouds()
+            self._visualizer.removeAllShapes()
+            self._visualizer.addPointCloud(ori_cloud, id='original')
+
+        # Filter
         send_info = []
         print("Objects:", len(detections))
         for i, scloud in enumerate(detections):
@@ -140,9 +138,10 @@ class Lidar(threading.Thread):
 
             # Visualize
             if self._dovis:
-                self._visualizer.addPointCloud(scloud, id="cobj%02d" % i, viewport=self._visport1)
-                self._visualizer.addArrow([0,0,0], [x,y,z], id="bobj%02d" % i, viewport=self._visport1)
-                self._vistext_queue.put((str(size), x, y, z))
+                rgb = (np.random.rand(3) * 255).astype(int)
+                self._visualizer.addPointCloud(scloud, id="cobj%02d" % i, r=rgb[0], g=rgb[1], b=rgb[2])
+                self._visualizer.addSphere([x,y,z], 0.5, id="bobj%02d" % i)
+                # self._vistext_queue.put((str(size), x, y, z))
 
             # Send result
             send_info.append((float(x),float(y),float(z)))
@@ -177,7 +176,7 @@ def main():
     world = client.get_world()
 
     try:
-        lidar = Lidar(world, vis=False)
+        lidar = Lidar(world, vis=True)
         lidar.start()
         lidar.join()
     finally:
