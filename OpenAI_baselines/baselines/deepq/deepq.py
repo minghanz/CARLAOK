@@ -101,7 +101,7 @@ def _push_rule_based(obs,q_function,RL_action,testing=True):
     if obs[0,1] < 1:
         return True
 
-    corner_case_range = 50
+    corner_case_range = 30
     
     if obs[0,2] > corner_case_range and obs[0,5] >corner_case_range and obs[0,8]>corner_case_range and obs[0,10]>corner_case_range:
         return True

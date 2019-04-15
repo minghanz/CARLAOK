@@ -288,6 +288,7 @@ class CarlaEnv(gym.Env):
 
     def _draw_text(self,action):
 
+        return
         world = self.ego_vehicle.get_world()
         ego_vehicle_location = self.ego_vehicle.get_location()
         pos_x = ego_vehicle_location.x
@@ -407,7 +408,7 @@ class CarlaEnv(gym.Env):
         reward = 0
 
         if action == 0:
-            reward += 0.1
+            reward += 0.6
         if self.steps > 20:
             done = True
 

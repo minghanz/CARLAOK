@@ -205,7 +205,7 @@ class LocalPlanner(object):
         self._total_running_time = 0.0
 
 
-        self._perception_enable = True
+        self._perception_enable = False
         self._marker_color_lidar = carla.Color()
         self._marker_color_camera = carla.Color()
         self._marker_color_filter = carla.Color()
@@ -495,11 +495,10 @@ class LocalPlanner(object):
 
 
     def _Lane_change_decision(self,
-                                front_vehicle_inside,front_vehicle_inside_distance,
-                                front_vehicle_outside,front_vehicle_outside_distance,
-                                behind_vehicle_inside,behind_vehicle_inside_distance,
-                                behind_vehicle_outside,behind_vehicle_outside_distance
-                                ):
+                                front_vehicle_inside,
+                                front_vehicle_outside,
+                                behind_vehicle_inside,
+                                behind_vehicle_outside):
 
 
         r_target = self._r_target
@@ -507,10 +506,16 @@ class LocalPlanner(object):
         ego_r = self._distance_to_center(self._vehicle)
         current_speed = get_speed(self._vehicle)
 
+        front_vehicle_inside_distance = self._RL_state.front_vehicle_inside_distance
         front_vehicle_inside_speed = self._RL_state.front_vehicle_inside_speed
         front_vehicle_inside_direction = self._RL_state.front_vehicle_inside_direction
+
+        front_vehicle_outside_distance = self._RL_state.front_vehicle_outside_distance
         front_vehicle_outside_speed = self._RL_state.front_vehicle_outside_speed
         front_vehicle_outside_direction = self._RL_state.front_vehicle_outside_direction
+
+        behind_vehicle_inside_distance = self._RL_state.behind_vehicle_inside_distance
+        behind_vehicle_outside_distance = self._RL_state.behind_vehicle_outside_distance
 
         IDM_v_inside_decision = self._IDM_desired_speed(front_vehicle_inside,front_vehicle_inside_distance,front_vehicle_inside_speed,front_vehicle_inside_direction,1.5)
         IDM_v_outside_decision = self._IDM_desired_speed(front_vehicle_outside,front_vehicle_outside_distance,front_vehicle_outside_speed,front_vehicle_outside_direction,1.5)
@@ -603,10 +608,15 @@ class LocalPlanner(object):
         ##############################################################
 
 
-    def _longitudinal_decision(self,
-                                front_vehicle_inside,front_vehicle_inside_distance,front_vehicle_inside_speed,
-                                front_vehicle_outside,front_vehicle_outside_distance,front_vehicle_outside_speed):
+    def _longitudinal_decision(self,front_vehicle_inside,front_vehicle_outside):
         #self._acceleration
+
+        front_vehicle_inside_distance = self._RL_state.front_vehicle_inside_distance
+        front_vehicle_inside_speed = self._RL_state.front_vehicle_inside_speed
+        front_vehicle_inside_direction = self._RL_state.front_vehicle_inside_direction
+        front_vehicle_outside_distance = self._RL_state.front_vehicle_outside_distance
+        front_vehicle_outside_speed = self._RL_state.front_vehicle_outside_speed
+        front_vehicle_outside_direction = self._RL_state.front_vehicle_outside_direction
 
         acc = self._acceleration
         current_speed = get_speed(self._vehicle)
@@ -614,9 +624,6 @@ class LocalPlanner(object):
 
         if self._inroundabout_lane == 1.5 and current_speed > 5 and (front_vehicle_inside_distance < 20 or front_vehicle_outside_distance <20):
             return 0
-
-        front_vehicle_inside_direction = self._RL_state.front_vehicle_inside_direction
-        front_vehicle_outside_direction = self._RL_state.front_vehicle_outside_direction
 
         IDM_v_inside = self._IDM_desired_speed(front_vehicle_inside,front_vehicle_inside_distance,front_vehicle_inside_speed,front_vehicle_inside_direction,self._decision_dt)
         IDM_v_outside = self._IDM_desired_speed(front_vehicle_outside,front_vehicle_outside_distance,front_vehicle_outside_speed,front_vehicle_outside_direction,self._decision_dt)
@@ -659,8 +666,10 @@ class LocalPlanner(object):
         #         IDM_v = 15
 
 
-    def _generate_decision(self):
-
+    def _environment_perception(self):
+        """
+        Update the environment information from sensor or true value. Save in RL_state
+        """
         ego_vehicle_location = self._vehicle.get_location()
         world_decision = self._vehicle.get_world()
         actor_list = world_decision.get_actors()
@@ -730,7 +739,7 @@ class LocalPlanner(object):
                             print(ideal_car_obj[iid].id, "speed: ", get_speed(ideal_car_obj[iid]) )
                             
 
-                    print("exist_in_list", exist_in_list)
+                    #print("exist_in_list", exist_in_list)
                     if exist_in_list == False:
                         percp_veh = PercpVeh()
                         percp_veh.id = ideal_car_obj[iid].id
@@ -743,7 +752,7 @@ class LocalPlanner(object):
                     # matched_car.append((ideal_car_obj[iid], sid))
                     matched_car.append((ideal_car_obj[iid], percp_veh))
 
-            print('---------------------------------------')
+            #print('---------------------------------------')
 
             # print(dist_list)
             # all_matched = range(len(sensor_detections))
@@ -986,7 +995,7 @@ class LocalPlanner(object):
         if front_vehicle_inside_distance < 200:
             self._RL_state.front_vehicle_inside_speed = front_vehicle_inside_speed
         else:
-            self._RL_state.front_vehicle_inside_speed = 50.0
+            self._RL_state.front_vehicle_inside_speed = 30.0
 
         self._RL_state.front_vehicle_outside = front_vehicle_outside
         self._RL_state.front_vehicle_outside_distance = front_vehicle_outside_distance
@@ -994,7 +1003,7 @@ class LocalPlanner(object):
         if front_vehicle_outside_distance < 200:
             self._RL_state.front_vehicle_outside_speed = front_vehicle_outside_speed
         else:
-            self._RL_state.front_vehicle_outside_speed = 50.0
+            self._RL_state.front_vehicle_outside_speed = 30.0
 
         self._RL_state.behind_vehicle_inside = behind_vehicle_inside
         self._RL_state.behind_vehicle_inside_distance = behind_vehicle_inside_distance
@@ -1009,7 +1018,25 @@ class LocalPlanner(object):
         self._RL_state.behind_vehicle_inside_percp = behind_vehicle_inside_percp
         self._RL_state.behind_vehicle_outside_percp = behind_vehicle_outside_percp
         
+
+    def _generate_decision(self):
+
         
+        self._environment_perception()
+
+        front_vehicle_inside = self._RL_state.front_vehicle_inside
+        # front_vehicle_inside_distance = self._RL_state.front_vehicle_inside_distance
+        # front_vehicle_inside_speed = self._RL_state.front_vehicle_inside_speed
+        front_vehicle_outside = self._RL_state.front_vehicle_outside
+        # front_vehicle_outside_distance = self._RL_state.front_vehicle_outside_distance
+        # front_vehicle_outside_speed = self._RL_state.front_vehicle_outside_speed
+
+        behind_vehicle_inside = self._RL_state.behind_vehicle_inside
+        # behind_vehicle_inside_distance = self._RL_state.behind_vehicle_inside_distance
+        behind_vehicle_outside = self._RL_state.behind_vehicle_outside
+        # behind_vehicle_outside_distance = self._RL_state.behind_vehicle_outside_distance
+
+
         """
         Rule-based decision:
         """
@@ -1024,15 +1051,13 @@ class LocalPlanner(object):
 
         if self._make_decision:
 
-            r_target = self._Lane_change_decision(front_vehicle_inside,front_vehicle_inside_distance,
-                                front_vehicle_outside,front_vehicle_outside_distance,
-                                behind_vehicle_inside,behind_vehicle_inside_distance,
-                                behind_vehicle_outside,behind_vehicle_outside_distance
-                                )
+            r_target = self._Lane_change_decision(front_vehicle_inside,
+                                front_vehicle_outside,
+                                behind_vehicle_inside,
+                                behind_vehicle_outside)
             self._r_target = r_target
 
-            acc = self._longitudinal_decision(front_vehicle_inside,front_vehicle_inside_distance,front_vehicle_inside_speed,
-                                front_vehicle_outside,front_vehicle_outside_distance,front_vehicle_outside_speed)
+            acc = self._longitudinal_decision(front_vehicle_inside,front_vehicle_outside)
 
             self._acceleration = acc
             self._make_decision = False
@@ -1042,25 +1067,6 @@ class LocalPlanner(object):
         if self._decision_time_accumulation > self._decision_dt:
             self._make_decision = True
 
-        # if self._inroundabout_lane == 1.0:
-        #     IDM_v = IDM_v_inside
-
-        # if self._inroundabout_lane == 2.0:
-        #     IDM_v = IDM_v_outside
-
-        # if self._inroundabout_lane == 1.5:
-        #     IDM_v = min(IDM_v_inside,IDM_v_outside)
-        #     if IDM_v < 10:
-        #         IDM_v = 10
-
-
-        # if IDM_v < 15 :
-        #     if front_vehicle_inside_distance > 30 and self._inroundabout_lane == 1.0:
-        #         IDM_v = 15
-        #     if front_vehicle_outside_distance > 30 and self._inroundabout_lane == 2.0:
-        #         IDM_v = 15
-        #     # if front_vehicle_inside_distance > 30 and front_vehicle_outside_distance > 30:
-        #     #     IDM_v = 15
 
         IDM_v = self._last_speed + self._acceleration*self._decision_dt
 
@@ -1070,8 +1076,6 @@ class LocalPlanner(object):
         # print("%03.2f %03.2f %03.2f %03.2f %03.2f %03.2f %d" % (self._inroundabout_lane, self._r_target,IDM_v,
         #     self._decision_time_accumulation,front_vehicle_inside_distance,front_vehicle_outside_distance,self._vehicle.id))
 
-        #print(self._inroundabout_lane, self._r_target, IDM_v)
-           # self._decision_time_accumulation,front_vehicle_inside_distance,front_vehicle_outside_distance,self._vehicle.id)
 
 
     def record_data(self, control):
@@ -1395,157 +1399,10 @@ class LocalPlanner(object):
 #########
 
     def get_RL_state(self):
-        ego_vehicle_location = self._vehicle.get_location()
-        world_decision = self._vehicle.get_world()
-        actor_list = world_decision.get_actors()
-        vehicle_list = actor_list.filter("*vehicle*")
-        lights_list = actor_list.filter("*traffic_light*")
-        roundabout_vehicle_list = []
-        front_vehicle_inside = None
-        front_vehicle_outside = None
-        front_vehicle_inside_distance = 200
-        front_vehicle_outside_distance = 200
 
-        behind_vehicle_inside = None
-        behind_vehicle_outside = None
-        behind_vehicle_inside_distance = 200
-        behind_vehicle_outside_distance = 200
-
-        cx = self._cx
-        cy = self._cy
-        for target_vehicle in vehicle_list:
-            if target_vehicle.id == self._vehicle.id:
-                continue
-            if target_vehicle is None:
-                continue
-            loc = target_vehicle.get_location()
-            distance_to_roundabout = self._distance_to_center(target_vehicle)
-            theta_target_vehicle = np.arctan2(loc.y-cy,loc.x-cx)
-            theta_ego_vehicle = np.arctan2(ego_vehicle_location.y-cy,ego_vehicle_location.x-cx)
-            target_vehicle_speed = get_speed(target_vehicle)
-            prediction_threshold = 5
-            dtheta = (-theta_target_vehicle + theta_ego_vehicle) % (2*np.pi)
-            cosangle = self._direction_to_center(target_vehicle)
-
-            if distance_to_roundabout < self._r1 + 2:
-                distance = self._r1*(dtheta)
-                if distance < front_vehicle_inside_distance:
-                    front_vehicle_inside_distance = distance
-                    front_vehicle_inside = target_vehicle
-
-                behind_distance = self._r1*(2*np.pi-dtheta)
-                if behind_distance < behind_vehicle_inside_distance:
-                    behind_vehicle_inside_distance = behind_distance
-                    behind_vehicle_inside = target_vehicle
-
-                if cosangle < -0.1 and target_vehicle_speed > prediction_threshold:
-                    distance = self._r2*(dtheta)
-                    if distance < front_vehicle_outside_distance:
-                        front_vehicle_outside_distance = distance
-                        front_vehicle_outside = target_vehicle
-
-
-            if distance_to_roundabout >= self._r1 + 1 and distance_to_roundabout < self._r2 + 4:
-                distance = self._r2*(dtheta)
-                if distance < front_vehicle_outside_distance:
-                    front_vehicle_outside_distance = distance
-                    front_vehicle_outside = target_vehicle
-
-                behind_distance = self._r2*(2*np.pi-dtheta)
-                if behind_distance < behind_vehicle_outside_distance:
-                    behind_vehicle_outside_distance = behind_distance
-                    behind_vehicle_outside = target_vehicle
-
-            if distance_to_roundabout >= self._r1 + 1 and distance_to_roundabout < self._r2 + 13:
-                if cosangle > 0.2 and target_vehicle_speed > prediction_threshold:
-                    distance = self._r1*(dtheta)
-                    if distance < front_vehicle_inside_distance:
-                        front_vehicle_inside_distance = distance
-                        front_vehicle_inside = target_vehicle
-
-            if distance_to_roundabout >= self._r2 + 1 and distance_to_roundabout < self._r2 + 13:
-                if cosangle > 0.2 and target_vehicle_speed > prediction_threshold:
-                    distance = self._r2*(dtheta)
-                    if distance < front_vehicle_outside_distance:
-                        front_vehicle_outside_distance = distance
-                        front_vehicle_outside = target_vehicle
-
-
-        if front_vehicle_inside is None and front_vehicle_outside is None and behind_vehicle_outside is None and behind_vehicle_inside is None:
-            self._empty_road = True
-        else:
-            self._empty_road = False
-
-        self._RL_state.ego_x = ego_vehicle_location.x
-        self._RL_state.ego_y = ego_vehicle_location.y
-        self._RL_state.ego_speed = get_speed(self._vehicle)
-        self._RL_state.ego_vehicle = self._vehicle
-
-        self._RL_state.front_vehicle_inside = front_vehicle_inside
-        self._RL_state.front_vehicle_inside_distance = front_vehicle_inside_distance
-        if front_vehicle_inside is not None:
-            self._RL_state.front_vehicle_inside_direction = self._direction_to_center(front_vehicle_inside)
-            self._RL_state.front_vehicle_inside_speed = get_speed(front_vehicle_inside)
-        else:
-            self._RL_state.front_vehicle_inside_direction = 0.0
-            self._RL_state.front_vehicle_inside_speed = 30.0
-
-        self._RL_state.front_vehicle_outside =front_vehicle_outside
-        self._RL_state.front_vehicle_outside_distance = front_vehicle_outside_distance
-        if front_vehicle_outside is not None:
-            self._RL_state.front_vehicle_outside_direction = self._direction_to_center(front_vehicle_outside)
-            self._RL_state.front_vehicle_outside_speed = get_speed(front_vehicle_outside)
-        else:
-            self._RL_state.front_vehicle_outside_direction = 0.0
-            self._RL_state.front_vehicle_outside_speed = 30.0
-
-
-        self._RL_state.behind_vehicle_inside = behind_vehicle_inside
-        self._RL_state.behind_vehicle_inside_distance = behind_vehicle_inside_distance
-        if behind_vehicle_inside is not None:
-            self._RL_state.behind_vehicle_inside_direction = self._direction_to_center(behind_vehicle_inside)
-            self._RL_state.behind_vehicle_inside_speed = get_speed(behind_vehicle_inside)
-        else:
-            self._RL_state.behind_vehicle_inside_direction = 0.0
-            self._RL_state.behind_vehicle_inside_speed = 0.0
-
-        self._RL_state.behind_vehicle_outside = behind_vehicle_outside
-        self._RL_state.behind_vehicle_outside_distance = behind_vehicle_outside_distance
-        if behind_vehicle_outside is not None:
-            self._RL_state.behind_vehicle_outside_direction = self._direction_to_center(behind_vehicle_outside)
-            self._RL_state.behind_vehicle_outside_speed = get_speed(behind_vehicle_outside)
-        else:
-            self._RL_state.behind_vehicle_outside_direction = 0.0
-            self._RL_state.behind_vehicle_outside_speed = 0.0
-
+        self._environment_perception()
         return self._RL_state
 
-        """
-        self.ego_x = 0.0
-        self.ego_y = 0.0
-        self.ego_speed = 0.0
-        self.ego_vehicle = None
-
-        self.front_vehicle_inside = None  ### cannot be used directly
-        self.front_vehicle_inside_distance = 0.0
-        self.front_vehicle_inside_direction = 0.0
-        self.front_vehicle_inside_speed = 0.0
-
-        self.front_vehicle_outside = None  ### cannot be used directly
-        self.front_vehicle_outside_distance = 0.0
-        self.front_vehicle_outside_direction = 0.0
-        self.front_vehicle_outside_speed = 0.0
-
-        self.behind_vehicle_inside = None  ### cannot be used directly
-        self.behind_vehicle_inside_distance = 0.0
-        self.behind_vehicle_inside_direction = 0.0
-        self.behind_vehicle_inside_speed = 0.0
-
-        self.behind_vehicle_outside = None  ### cannot be used directly
-        self.behind_vehicle_outside_distance = 0.0
-        self.behind_vehicle_outside_direction = 0.0
-        self.behind_vehicle_outside_speed = 0.0
-        """
 
     def set_target_RL(self, action_option):
         """
