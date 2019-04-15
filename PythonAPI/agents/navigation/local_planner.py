@@ -1128,14 +1128,14 @@ class LocalPlanner(object):
 
             with open(os.path.join(front_inside_folder, obs_folder, fname_direc_front), 'a') as file:
                 direction = self._RL_state.front_vehicle_inside_direction
-                if direction > 200:
+                if direction > 199:
                     file.write('nan\n')
                 else:
                     file.write('%.2f \n'%(direction))
             
             with open(os.path.join(front_outside_folder, obs_folder, fname_direc_front), 'a') as file:
                 direction = self._RL_state.front_vehicle_outside_direction
-                if direction > 200:
+                if direction > 199:
                     file.write('nan\n')
                 else:
                     file.write('%.2f \n'%(direction))

@@ -22,8 +22,10 @@ wait
 #########################33
 /home/carla/CARLA_0.9.4/CarlaUE4.sh -benchmark -fps=20
 
-cd /home/carla/CARLAOK/Carlaok
-python CARLAOK31.py
+# cd /home/carla/CARLAOK/Carlaok
+# python CARLAOK31.py
+cd /home/carla/CARLAOK/OpenAI_baselines
+python -m baselines.run --alg=deepq --env=carla-v0 --num_timesteps=1e6 --save_path=/home/carla/CARLAOK/Carla_model/generate --load_path=/home/carla/CARLAOK/Carla_model/base_model
 
 cd /home/carla/CARLAOK/Carlaok
 python cam_client.py

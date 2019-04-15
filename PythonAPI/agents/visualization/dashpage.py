@@ -160,7 +160,7 @@ def fresh_time(niter):
 @app.callback(Output('rl_state', 'children'),
              [Input('interval-component', 'n_intervals')])
 def fresh_rl_state(niter):
-    return "RL Kicking In: {0}".format(data['enable_safeguard'])
+    return "RL Kicking In: {0}".format(not data['enable_safeguard'])
 
 @app.callback(Output('percp_state', 'children'),
              [Input('interval-component', 'n_intervals')])

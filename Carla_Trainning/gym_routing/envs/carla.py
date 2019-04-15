@@ -35,6 +35,7 @@ from agents.navigation.roaming_agent import *
 from agents.navigation.basic_agent import *
 from agents.navigation.local_planner import LocalPlanner,Driving_State
 from agents.tools.misc import distance_vehicle, get_speed
+from agents.visualization.dashpage import run_thread
 
 
 
@@ -262,6 +263,8 @@ class CarlaEnv(gym.Env):
         low  = np.array([18,  0,   0, -1,  0,   0,-1,  0,   0,  0,   0,  0])
         high = np.array([40, 60, 200,  1, 36, 200, 1, 36, 200, 36, 200, 36])
 
+        # low  = np.array([18,  0,   0, -1,   0,-1,   0,   0])
+        # high = np.array([40, 60, 200,  1, 200, 1, 200, 200])
 
         self.observation_space = spaces.Box(low, high, dtype=np.float32)
         self.seed()
@@ -301,14 +304,14 @@ class CarlaEnv(gym.Env):
             text_color.r = 25
             text_color.g = 202
             text_color.b = 173
-            world.debug.draw_string(text_loc, "Rule-based", draw_shadow=True, color=text_color, life_time=0.2)
+            #world.debug.draw_string(text_loc, "Rule-based", draw_shadow=True, color=text_color, life_time=0.2)
             #world.debug.draw_point(point_loc, size=0.8, color=text_color, life_time=0.2)
         else:
             text_color.r = 244
             text_color.g = 96
             text_color.b = 108
             text_loc = carla.Location(x = 30,y = 16, z = 4)
-            world.debug.draw_string(text_loc, "RL kicks in", draw_shadow=True, color=text_color, life_time=0.2)
+            #world.debug.draw_string(text_loc, "RL kicks in", draw_shadow=True, color=text_color, life_time=0.2)
             #world.debug.draw_point(point_loc, size=0.8, color=text_color, life_time=0.2)
 
 
@@ -346,7 +349,7 @@ class CarlaEnv(gym.Env):
         make_decision = self._local_planner._make_decision
         while not make_decision:
             #self.add_a_vehicle()
-            if self.car_num < 80 or self._local_planner._empty_road:
+            if self.car_num < 80:# or self._local_planner._empty_road:
                 #print("adding vehicles: ",self.car_num)
                 self.add_a_vehicle()
             while not world.wait_for_tick(10.0):
@@ -374,6 +377,13 @@ class CarlaEnv(gym.Env):
                      Carla_state.behind_vehicle_inside_speed,\
                      Carla_state.behind_vehicle_outside_distance,\
                      Carla_state.behind_vehicle_outside_speed
+        # self.state = r_ego, Carla_state.ego_speed,\
+        #              Carla_state.front_vehicle_inside_distance,\
+        #              Carla_state.front_vehicle_inside_direction,\
+        #              Carla_state.front_vehicle_outside_distance,\
+        #              Carla_state.front_vehicle_outside_direction,\
+        #              Carla_state.behind_vehicle_inside_distance,\
+        #              Carla_state.behind_vehicle_outside_distance
 
         """
         self.ego_x = 0.0
@@ -493,6 +503,13 @@ class CarlaEnv(gym.Env):
                      Carla_state.behind_vehicle_inside_speed,\
                      Carla_state.behind_vehicle_outside_distance,\
                      Carla_state.behind_vehicle_outside_speed
+        # self.state = r_ego, Carla_state.ego_speed,\
+        #              Carla_state.front_vehicle_inside_distance,\
+        #              Carla_state.front_vehicle_inside_direction,\
+        #              Carla_state.front_vehicle_outside_distance,\
+        #              Carla_state.front_vehicle_outside_direction,\
+        #              Carla_state.behind_vehicle_inside_distance,\
+        #              Carla_state.behind_vehicle_outside_distance
         ## Carla_state.ego_x,Carla_state.ego_y
         self.steps = 1
 

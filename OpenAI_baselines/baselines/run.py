@@ -39,6 +39,7 @@ import carla
 from carla import ColorConverter as cc
 from agents.navigation.roaming_agent import *
 from agents.navigation.basic_agent import *
+from agents.visualization.dashpage import run_thread
 
 ####3
 try:
@@ -207,6 +208,7 @@ def parse_cmdline_kwargs(args):
 def main(args):
     # configure logger, disable logging in child MPI processes (with rank > 0)
 
+    run_thread()
 
     arg_parser = common_arg_parser()
     args, unknown_args = arg_parser.parse_known_args(args)

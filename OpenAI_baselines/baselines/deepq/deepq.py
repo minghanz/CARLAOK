@@ -102,12 +102,12 @@ def _push_rule_based(obs,q_function,RL_action,testing=True):
         return True
 
     corner_case_range = 30
-    
-    if obs[0,2] > corner_case_range and obs[0,5] >corner_case_range and obs[0,8]>corner_case_range and obs[0,10]>corner_case_range:
+    ###5 8 10
+    if obs[0,2] > corner_case_range and obs[0,5] >corner_case_range and obs[0,8]>10 and obs[0,10]>10:
         return True
 
-    # if q_function[0,0]+1 > q_function[0,RL_action]:
-    #     return True
+    if q_function[0,0]+0.26 > q_function[0,RL_action]:
+        return True
 
     return False
     """
@@ -313,19 +313,22 @@ def learn(env,
 
             action, q_function_cz = act(np.array(obs)[None], update_eps=update_eps, **kwargs)
             
-            if t < 40:
+            if t < 20:
                 action = 0
             if obs[0,1] < 10:
                 action = 0
             if _push_rule_based(obs,q_function_cz,action):
                 action = 0
+            else:
+                action = 1
 
             # if action == 0:
             #     RL_signal = "Rule-based"
             # else:
             #     RL_signal = "RL kicks in"
             #print(RL_signal,t,action,q_function_cz)
-
+            #action = 0
+            #print(action)
             env_action = action
             reset = False
             new_obs, rew, done, _ = env.step(env_action)

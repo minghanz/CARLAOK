@@ -188,8 +188,8 @@ def build_act(make_obs_ph, q_func, num_actions, scope="deepq", reuse=None):
         chose_random = tf.random_uniform(tf.stack([batch_size]), minval=0, maxval=1, dtype=tf.float32) < eps
         stochastic_actions = tf.where(chose_random, random_actions, deterministic_actions)
 
-        output_actions = tf.cond(stochastic_ph, lambda: stochastic_actions, lambda: deterministic_actions)
-        #output_actions = deterministic_actions
+        #output_actions = tf.cond(stochastic_ph, lambda: stochastic_actions, lambda: deterministic_actions)
+        output_actions = deterministic_actions
         #output_actions = 0
         update_eps_expr = eps.assign(tf.cond(update_eps_ph >= 0, lambda: update_eps_ph, lambda: eps))
         _act = U.function(inputs=[observations_ph, stochastic_ph, update_eps_ph],
