@@ -110,7 +110,7 @@ class Lidar(threading.Thread):
         if self._dovis:
             self._visualizer.removeAllPointClouds()
             self._visualizer.removeAllShapes()
-            self._visualizer.addPointCloud(ori_cloud, id='original')
+            self._visualizer.addPointCloud(ori_cloud, id='original', field='z')
 
         # Filter
         send_info = []
@@ -140,7 +140,7 @@ class Lidar(threading.Thread):
             if self._dovis:
                 rgb = (np.random.rand(3) * 255).astype(int)
                 self._visualizer.addPointCloud(scloud, id="cobj%02d" % i, r=rgb[0], g=rgb[1], b=rgb[2])
-                self._visualizer.addSphere([x,y,z], 0.5, id="bobj%02d" % i)
+                self._visualizer.addSphere([x,y,z], 2, id="bobj%02d" % i)
                 # self._vistext_queue.put((str(size), x, y, z))
 
             # Send result

@@ -125,3 +125,4 @@ dmypy.json
 # Carla
 Carlaok/yolov3/carla_out/
 Carlaok/yolov3/carla_in/
+Carlaok/data_log

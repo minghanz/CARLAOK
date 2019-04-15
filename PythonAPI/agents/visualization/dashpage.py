@@ -175,17 +175,17 @@ def fresh_aggr_state(niter):
 @app.callback(Output('throttle', 'children'),
              [Input('interval-component', 'n_intervals')])
 def fresh_throttle(niter):
-    return "Throttle: {0}%".format(int(data['throttle'][-1]*100))
+    return "Throttle: {0}%".format(int(data['throttle'][-1]*100) if len(data['throttle']) > 0 else 'N/A')
 
 @app.callback(Output('brake', 'children'),
              [Input('interval-component', 'n_intervals')])
 def fresh_brake(niter):
-    return "Brake: {0}%".format(int(data['brake'][-1]*100))
+    return "Brake: {0}%".format(int(data['brake'][-1]*100) if len(data['brake']) > 0 else 'N/A')
 
 @app.callback(Output('steering', 'children'),
              [Input('interval-component', 'n_intervals')])
 def fresh_steering(niter):
-    return "Steering: {0}".format(int(data['steering'][-1]*100))
+    return "Steering: {0}".format(int(data['steering'][-1]*100) if len(data['steering']) > 0 else 'N/A')
 
 @app.callback(Output('speed-graph', 'figure'),
              [Input('interval-component', 'n_intervals')])

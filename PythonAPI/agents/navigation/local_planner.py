@@ -205,7 +205,7 @@ class LocalPlanner(object):
         self._total_running_time = 0.0
 
 
-        self._perception_enable = False
+        self._perception_enable = True
         self._marker_color_lidar = carla.Color()
         self._marker_color_camera = carla.Color()
         self._marker_color_filter = carla.Color()
@@ -1080,16 +1080,16 @@ class LocalPlanner(object):
 
     def record_data(self, control):
 
-        front_inside_folder = 'front_in'
-        front_outside_folder = 'front_out'
-        behind_inside_folder = 'behind_in'
-        behind_outside_folder = 'behind_out'
+        front_inside_folder = 'data_log/front_in'
+        front_outside_folder = 'data_log/front_out'
+        behind_inside_folder = 'data_log/behind_in'
+        behind_outside_folder = 'data_log/behind_out'
         obs_folder = 'obs'
         true_folder = 'true'
         fname_xy = 'xy_vxvy.txt'
         fname_direc_front = 'direction_frontvehonly.txt'
-        fname_time = 'timestamp.txt'
-        fname_control = 'control.txt'
+        fname_time = 'data_log/timestamp.txt'
+        fname_control = 'data_log/control.txt'
         
         folder_list = [front_inside_folder, front_outside_folder, behind_inside_folder, behind_outside_folder]
         veh_percp_list = [self._RL_state.front_vehicle_inside_percp, 
@@ -1104,25 +1104,41 @@ class LocalPlanner(object):
                         self._RL_state.front_vehicle_outside_distance, 
                         self._RL_state.behind_vehicle_inside_distance,
                         self._RL_state.behind_vehicle_outside_distance]
+
+        for folder in folder_list:
+            if not os.path.exists(folder):
+                os.makedirs(folder)
+
         ##### observation value
         if self._perception_enable:
             for i, folder in enumerate(folder_list):
+                if not os.path.exists(os.path.join(folder, obs_folder)):
+                    os.makedirs(os.path.join(folder, obs_folder))
                 with open(os.path.join(folder, obs_folder, fname_xy), 'a') as file:
-                    x = veh_percp_list[i].location.x
-                    y = veh_percp_list[i].location.y
-                    vx = veh_percp_list[i].state[2]
-                    vy = veh_percp_list[i].state[3]
-                    speed = speed_list[i]
-                    distance = dist_list[i]
-                    file.write('%.2f %.2f %.2f %.2f %.2f %.2f\n'%(x, y, vx, vy, speed, distance) )
+                    if veh_percp_list[i] is None:
+                        file.write('nan nan nan nan nan nan\n')
+                    else:
+                        x = veh_percp_list[i].location.x
+                        y = veh_percp_list[i].location.y
+                        vx = veh_percp_list[i].state[2]
+                        vy = veh_percp_list[i].state[3]
+                        speed = speed_list[i]
+                        distance = dist_list[i]
+                        file.write('%.2f %.2f %.2f %.2f %.2f %.2f\n'%(x, y, vx, vy, speed, distance) )
 
             with open(os.path.join(front_inside_folder, obs_folder, fname_direc_front), 'a') as file:
                 direction = self._RL_state.front_vehicle_inside_direction
-                file.write('%.2f \n'%(direction))
+                if direction > 200:
+                    file.write('nan\n')
+                else:
+                    file.write('%.2f \n'%(direction))
             
-            with open(os.path.join(front_outside_folder, obs_folder, fname_direc_front, 'a')) as file:
+            with open(os.path.join(front_outside_folder, obs_folder, fname_direc_front), 'a') as file:
                 direction = self._RL_state.front_vehicle_outside_direction
-                file.write('%.2f \n'%(direction))
+                if direction > 200:
+                    file.write('nan\n')
+                else:
+                    file.write('%.2f \n'%(direction))
 
         ##### true value
         veh_percp_list_true = [self._RL_state.front_vehicle_inside, 
@@ -1136,26 +1152,37 @@ class LocalPlanner(object):
                         lambda x: self._r2*(2*np.pi-x) ]
 
         for i, folder in enumerate(folder_list):
+            if not os.path.exists(os.path.join(folder, true_folder)):
+                os.makedirs(os.path.join(folder, true_folder))
             with open(os.path.join(folder, true_folder, fname_xy), 'a') as file:
-                loc = veh_percp_list_true[i].get_location()
-                velo = veh_percp_list_true[i].get_velocity()
-                speed = get_speed(veh_percp_list_true[i])
+                if veh_percp_list[i] is None:
+                    file.write('nan nan nan nan nan nan\n')
+                else:
+                    loc = veh_percp_list_true[i].get_location()
+                    velo = veh_percp_list_true[i].get_velocity()
+                    speed = get_speed(veh_percp_list_true[i])
 
-                theta_target_vehicle = np.arctan2(loc.y-self._cy,loc.x-self._cx)
-                ego_loc = self._vehicle.get_location()
-                theta_ego_vehicle = np.arctan2(ego_loc.y-self._cy,ego_loc.x-self._cx)
-                dtheta = (-theta_target_vehicle + theta_ego_vehicle) % (2*np.pi)
+                    theta_target_vehicle = np.arctan2(loc.y-self._cy,loc.x-self._cx)
+                    ego_loc = self._vehicle.get_location()
+                    theta_ego_vehicle = np.arctan2(ego_loc.y-self._cy,ego_loc.x-self._cx)
+                    dtheta = (-theta_target_vehicle + theta_ego_vehicle) % (2*np.pi)
 
-                distance = dist_func_true[i](dtheta)
-                file.write('%.2f %.2f %.2f %.2f %.2f %.2f\n'%(loc.x, loc.y, velo.x, velo.y, speed, distance) )
+                    distance = dist_func_true[i](dtheta)
+                    file.write('%.2f %.2f %.2f %.2f %.2f %.2f\n'%(loc.x, loc.y, velo.x, velo.y, speed, distance) )
 
         with open(os.path.join(front_inside_folder, true_folder, fname_direc_front), 'a') as file:
-            direction = self._direction_to_center(self._RL_state.front_vehicle_inside)
-            file.write('%.2f \n'%(direction))
+            if self._RL_state.front_vehicle_inside is None:
+                file.write('nan\n')
+            else:
+                direction = self._direction_to_center(self._RL_state.front_vehicle_inside)
+                file.write('%.2f \n'%(direction))
         
-        with open(os.path.join(front_outside_folder, true_folder, fname_direc_front, 'a')) as file:
-            direction = self._direction_to_center(self._RL_state.front_vehicle_outside)
-            file.write('%.2f \n'%(direction))
+        with open(os.path.join(front_outside_folder, true_folder, fname_direc_front), 'a') as file:
+            if self._RL_state.front_vehicle_outside is None:
+                file.write('nan\n')
+            else:
+                direction = self._direction_to_center(self._RL_state.front_vehicle_outside)
+                file.write('%.2f \n'%(direction))
             
         with open(fname_time, 'a') as file:
             file.write('%.2f \n'%(self._total_running_time))
@@ -1341,7 +1368,7 @@ class LocalPlanner(object):
         control = self._vehicle_controller.run_step(self._target_speed, waypoint_location, self._dt_real)
 
         # record perception and control
-        # self.record_data(control)
+        self.record_data(control)
         self.update_data(control)
 
         # purge the queue of obsolete waypoints
@@ -1372,7 +1399,7 @@ class LocalPlanner(object):
                 arrow_color.r = 220
                 arrow_color.g = 20
                 arrow_color.b = 60
-                sz = 5
+                sz = 2
 
             if self._inroundabout_inside:
                 world_draw = self._vehicle.get_world()
@@ -1387,7 +1414,7 @@ class LocalPlanner(object):
                 begin = carla.Location(x = cx+r_end *np.cos(theta_begin),y = cy+r_end *np.sin(theta_begin))
                 begin.z = 0.0
                 # arrow_color=carla.Color()
-                world_draw.debug.draw_arrow(begin, end, thickness=0.5, arrow_size = sz, color = arrow_color, life_time=1)
+                world_draw.debug.draw_arrow(begin, end, thickness=0.2, arrow_size = sz, color = arrow_color, life_time=1)
 
         return control
 

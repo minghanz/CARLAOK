@@ -26,7 +26,10 @@ cd /home/carla/CARLAOK/Carlaok
 python CARLAOK31.py
 
 cd /home/carla/CARLAOK/Carlaok
-cam_client.py
+python cam_client.py
+
+cd /home/carla/CARLAOK/Carlaok
+python lidar_client.py
 
 cd /home/carla/CARLAOK/Carlaok/yolov3
 python detect_carla_image_file.py
